@@ -2,6 +2,7 @@
 artifacts/
 logs/
 out/
+temp_artifacts*/
 .worktrees/
 cores/XiangShan-cx-2hart/
 cores/picorv32_2hart_wt/
