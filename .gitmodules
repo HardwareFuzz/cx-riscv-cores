@@ -30,3 +30,11 @@
 	path = cores/boom
 	url = https://github.com/HardwareFuzz/chipyard.git
 	branch = main
+[submodule "cores/openc910"]
+	path = cores/openc910
+	url = https://github.com/HardwareFuzz/openc910.git
+	branch = cx-build
+[submodule "cores/openc906"]
+	path = cores/openc906
+	url = https://github.com/HardwareFuzz/openc906.git
+	branch = cx-build
