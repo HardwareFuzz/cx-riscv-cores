@@ -24,7 +24,7 @@ Options:
   --isa PATTERN         Limit ISA tags to build. May be specified multiple times.
                         Supports shell globs (quote if needed), e.g. --isa 'rv32*'
   --only a,b,c          Only build selected cores (comma-separated, case-insensitive).
-                        Supported: picorv32,kronos,ibex,vexriscv,cva6,rocket-chip,boom,xiangshan
+                        Supported: picorv32,kronos,ibex,vexriscv,cva6,rocket-chip,boom,xiangshan,openc906,openc910
   --skip-xiangshan      Skip XiangShan (default: build)
   --with-xiangshan      (legacy) Include XiangShan (default: build)
   --xiangshan-preset <default|aligned|unaligned|both|all>
@@ -520,6 +520,62 @@ build_boom() {
   build_in_repo boom "main" "${args[@]}"
 }
 
+build_openc906() {
+  local _branch="$1"
+  local cores="$2"
+  local -a candidates=(rv64 rv64f rv64fd)
+
+  if [[ "${cores}" != "1" ]]; then
+    echo "[skip] openc906: only 1-core RV64 artifacts are supported"
+    return 0
+  fi
+  if [[ "${COV_MODE}" != "none" ]]; then
+    echo "[skip] openc906: coverage is not supported by the current smart_run backend"
+    return 0
+  fi
+
+  mapfile -t candidates < <(filter_isas openc906 "${candidates[@]}")
+  if (( ${#candidates[@]} == 0 )); then
+    echo "[skip] openc906: no ISA matches --isa filter"
+    return 0
+  fi
+
+  local -a args=()
+  for isa in "${candidates[@]}"; do
+    args+=(--isa "${isa}")
+  done
+  args+=(--cores "${cores}")
+  build_in_repo openc906 "main" "${args[@]}"
+}
+
+build_openc910() {
+  local _branch="$1"
+  local cores="$2"
+  local -a candidates=(rv64 rv64f rv64fd)
+
+  if [[ "${cores}" != "1" ]]; then
+    echo "[skip] openc910: only 1-core RV64 artifacts are supported"
+    return 0
+  fi
+  if [[ "${COV_MODE}" != "none" ]]; then
+    echo "[skip] openc910: coverage is not supported until the Verilator CX_TRACE path is integrated"
+    return 0
+  fi
+
+  mapfile -t candidates < <(filter_isas openc910 "${candidates[@]}")
+  if (( ${#candidates[@]} == 0 )); then
+    echo "[skip] openc910: no ISA matches --isa filter"
+    return 0
+  fi
+
+  local -a args=()
+  for isa in "${candidates[@]}"; do
+    args+=(--isa "${isa}")
+  done
+  args+=(--cores "${cores}")
+  build_in_repo openc910 "main" "${args[@]}"
+}
+
 build_xiangshan() {
   local branch="$1"
   local cores="$2"
@@ -594,6 +650,12 @@ build_set() {
   if contains_core boom; then
     build_boom "${branch}" "${cores}"
   fi
+  if contains_core openc906; then
+    build_openc906 "${branch}" "${cores}"
+  fi
+  if contains_core openc910; then
+    build_openc910 "${branch}" "${cores}"
+  fi
   if (( WITH_XIANGSHAN )); then
     if contains_core XiangShan; then
       build_xiangshan "${branch}" "${cores}"
@@ -630,7 +692,9 @@ if [[ "${CORES_MODE}" == "2" || "${CORES_MODE}" == "both" ]]; then
   build_set "cx-2hart-build" "2"
 fi
 
-stage_runtime_support
+if (( WITH_XIANGSHAN )) && contains_core XiangShan; then
+  stage_runtime_support
+fi
 
 echo
 echo "Artifacts:"
