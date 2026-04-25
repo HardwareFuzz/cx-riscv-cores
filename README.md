@@ -150,7 +150,7 @@ curl -fsSL https://raw.githubusercontent.com/HardwareFuzz/cx-riscv-cores/main/sc
 | `--cores <1\|2\|both>` | `both` | 构建 1-core、2-core 或两者都构建 |
 | `--matrix <minimal\|all>` | `minimal` | 选择默认矩阵或完整矩阵；除 XiangShan 外，其他 core 的 `minimal` 已覆盖全部支持 ISA 变体 |
 | `--isa PATTERN` | 不限制 | 只构建匹配的 ISA 标签；可重复传入，也支持逗号分隔和 shell glob |
-| `--only a,b,c` | 构建全部 | 只构建指定 core；支持 `picorv32,kronos,ibex,vexriscv,cva6,rocket-chip,boom,xiangshan` |
+| `--only a,b,c` | 构建全部 | 只构建指定 core；支持 `picorv32,kronos,ibex,vexriscv,cva6,rocket-chip,boom,xiangshan,openc906,openc910` |
 | `--skip-xiangshan` | 关闭 | 跳过 XiangShan |
 | `--with-xiangshan` | 开启 | 保留的兼容参数，效果等同默认行为 |
 | `--xiangshan-preset <default\|aligned\|unaligned\|both\|all>` | `auto` | XiangShan preset 选择；`auto` 会跟随 `--matrix`。发布产物只保留显式 `unaligned` / `aligned` 标签；`default` 是 `unaligned` 的兼容别名，`all` 是 `both` 的兼容别名 |
@@ -198,6 +198,7 @@ curl -fsSL https://raw.githubusercontent.com/HardwareFuzz/cx-riscv-cores/main/sc
 - `cva6` 接受 `rv64fd` 作为过滤别名，但最终产物名仍然是 `cva6_rv64_*`
 - `boom` 使用 `cores/boom` 里的 Chipyard `main` 分支，不跟随其他 core 的 `cx-build` / `cx-2hart-build` 分支约定
 - `boom` 当前只发布 `rv64fd` provider；默认 `1c` / `2c` 都使用 `small` 配置；如果你要切换成 `medium` / `large`，直接运行 `cores/boom/build.sh --variant ...`
+- `openc906` / `openc910` 使用各自子仓库的 `cx-build` 分支；当前发布 `rv64` / `rv64f` / `rv64fd` 三个单 hart 命名标签，无 coverage
 - `xiangshan` 的 `--isa` 目前只影响产物命名，不改变 RTL/config
 
 ### `scripts/generate_env.sh`
@@ -263,10 +264,11 @@ source ~/.bashrc
 
 coverage 规则统一如下：
 
-- 任意可构建二进制都可以带 `_cov` 后缀，对应环境变量名追加 `_COV`
-- 任意可构建二进制都可以带 `_cov_light` 后缀，对应环境变量名追加 `_COV_LIGHT`
+- 支持 coverage 的可构建二进制可以带 `_cov` 后缀，对应环境变量名追加 `_COV`
+- 支持 light coverage 的可构建二进制可以带 `_cov_light` 后缀，对应环境变量名追加 `_COV_LIGHT`
 - 运行时支持文件 `.so` 不存在 coverage 变体
 - 这些 coverage 文件只有在你真的执行过对应 coverage 构建后才会出现在 `artifact-dir`
+- coverage 支持是 per-core 能力；例如当前 OpenC906/OpenC910 的 smart_run wrapper 只发布无 coverage 产物
 
 例子：
 
@@ -362,6 +364,26 @@ xiangshan_rv64_unaligned_1c_cov_light -> CX_RISCV_CORES_XIANGSHAN_RV64_UNALIGNED
 | --- | --- | --- | --- | --- |
 | `boom_rv64fd_1c` | `CX_RISCV_CORES_BOOM_RV64FD_1C` | 是 | 是 | 默认单核 provider；底层配置是 `CXBoomSmallV3TraceConfig` |
 | `boom_rv64fd_2c` | `CX_RISCV_CORES_BOOM_RV64FD_2C` | 是 | 是 | 默认双核 provider；底层配置是 `CXBoomDualSmallV3TraceConfig` |
+
+### OpenC906
+
+当前 OpenC906 wrapper 是 RV64 单 hart smart_run flow；`rv64` / `rv64f` / `rv64fd` 是对同一类 runner 的能力标签。当前不发布 RV32、2-hart、vector 或 coverage 产物。
+
+| Artifact basename | Env var | `minimal` | `all` | Notes |
+| --- | --- | --- | --- | --- |
+| `openc906_rv64_1c` | `CX_RISCV_CORES_OPENC906_RV64_1C` | 是 | 是 | RV64、单 hart、无 coverage；来自 `cx-build` |
+| `openc906_rv64f_1c` | `CX_RISCV_CORES_OPENC906_RV64F_1C` | 是 | 是 | RV64F 标签、单 hart、无 coverage；来自 `cx-build` |
+| `openc906_rv64fd_1c` | `CX_RISCV_CORES_OPENC906_RV64FD_1C` | 是 | 是 | RV64FD 标签、单 hart、无 coverage；来自 `cx-build` |
+
+### OpenC910
+
+当前 OpenC910 wrapper 是 RV64 单 hart smart_run flow；`rv64` / `rv64f` / `rv64fd` 是对同一类 runner 的能力标签。当前不发布 RV32、2-hart、vector 或 coverage 产物；coverage 需要等 Verilator testbench 的 CX_TRACE 路径接通后再发布。
+
+| Artifact basename | Env var | `minimal` | `all` | Notes |
+| --- | --- | --- | --- | --- |
+| `openc910_rv64_1c` | `CX_RISCV_CORES_OPENC910_RV64_1C` | 是 | 是 | RV64、单 hart、无 coverage；来自 `cx-build` |
+| `openc910_rv64f_1c` | `CX_RISCV_CORES_OPENC910_RV64F_1C` | 是 | 是 | RV64F 标签、单 hart、无 coverage；来自 `cx-build` |
+| `openc910_rv64fd_1c` | `CX_RISCV_CORES_OPENC910_RV64FD_1C` | 是 | 是 | RV64FD 标签、单 hart、无 coverage；来自 `cx-build` |
 
 ### XiangShan
 
