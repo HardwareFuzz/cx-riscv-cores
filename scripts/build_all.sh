@@ -345,7 +345,9 @@ filter_isas() {
       out+=("${isa}")
     fi
   done
-  printf '%s\n' "${out[@]}"
+  for isa in "${out[@]}"; do
+    printf '%s\n' "${isa}"
+  done
 }
 
 xiangshan_presets() {
