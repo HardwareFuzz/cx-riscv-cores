@@ -521,16 +521,12 @@ build_boom() {
 }
 
 build_openc906() {
-  local _branch="$1"
+  local branch="$1"
   local cores="$2"
   local -a candidates=(rv64 rv64f rv64fd)
 
   if [[ "${cores}" != "1" ]]; then
     echo "[skip] openc906: only 1-core RV64 artifacts are supported"
-    return 0
-  fi
-  if [[ "${COV_MODE}" != "none" ]]; then
-    echo "[skip] openc906: coverage is not supported by the current smart_run backend"
     return 0
   fi
 
@@ -545,20 +541,16 @@ build_openc906() {
     args+=(--isa "${isa}")
   done
   args+=(--cores "${cores}")
-  build_in_repo openc906 "main" "${args[@]}"
+  build_in_repo openc906 "${branch}" "${args[@]}"
 }
 
 build_openc910() {
-  local _branch="$1"
+  local branch="$1"
   local cores="$2"
   local -a candidates=(rv64 rv64f rv64fd)
 
   if [[ "${cores}" != "1" && "${cores}" != "2" ]]; then
     echo "[skip] openc910: only 1- and 2-core RV64 artifacts are supported"
-    return 0
-  fi
-  if [[ "${COV_MODE}" != "none" ]]; then
-    echo "[skip] openc910: coverage is not supported until the Verilator CX_TRACE path is integrated"
     return 0
   fi
 
@@ -573,7 +565,7 @@ build_openc910() {
     args+=(--isa "${isa}")
   done
   args+=(--cores "${cores}")
-  build_in_repo openc910 "main" "${args[@]}"
+  build_in_repo openc910 "${branch}" "${args[@]}"
 }
 
 build_xiangshan() {

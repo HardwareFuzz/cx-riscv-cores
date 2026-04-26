@@ -198,7 +198,7 @@ curl -fsSL https://raw.githubusercontent.com/HardwareFuzz/cx-riscv-cores/main/sc
 - `cva6` 接受 `rv64fd` 作为过滤别名，但最终产物名仍然是 `cva6_rv64_*`
 - `boom` 使用 `cores/boom` 里的 Chipyard `main` 分支，不跟随其他 core 的 `cx-build` / `cx-2hart-build` 分支约定
 - `boom` 当前只发布 `rv64fd` provider；默认 `1c` / `2c` 都使用 `small` 配置；如果你要切换成 `medium` / `large`，直接运行 `cores/boom/build.sh --variant ...`
-- `openc906` 使用 `cx-build` 分支（单 hart，Verilator 后端，无 coverage）；`openc910` 同时使用 `cx-build`（单 hart）和 `cx-2hart-build`（双 hart），都是 Verilator 后端，无 coverage
+- `openc906` 使用 `cx-build` 分支（单 hart，Verilator 后端，支持 coverage `_cov` / `_cov_light`）；`openc910` 同时使用 `cx-build`（单 hart）和 `cx-2hart-build`（双 hart），都是 Verilator 后端，支持 coverage `_cov` / `_cov_light`
 - `xiangshan` 的 `--isa` 目前只影响产物命名，不改变 RTL/config
 
 ### `scripts/generate_env.sh`
@@ -268,7 +268,7 @@ coverage 规则统一如下：
 - 支持 light coverage 的可构建二进制可以带 `_cov_light` 后缀，对应环境变量名追加 `_COV_LIGHT`
 - 运行时支持文件 `.so` 不存在 coverage 变体
 - 这些 coverage 文件只有在你真的执行过对应 coverage 构建后才会出现在 `artifact-dir`
-- coverage 支持是 per-core 能力；例如当前 OpenC906/OpenC910 的 smart_run wrapper 只发布无 coverage 产物
+- coverage 支持是 per-core 能力；例如 picorv32/kronos 等 stub-coverage 后端不发布单独的 `_cov` 产物
 
 例子：
 
@@ -367,7 +367,7 @@ xiangshan_rv64_unaligned_1c_cov_light -> CX_RISCV_CORES_XIANGSHAN_RV64_UNALIGNED
 
 ### OpenC906
 
-当前 OpenC906 wrapper 是 RV64 单 hart smart_run flow；`rv64` / `rv64f` / `rv64fd` 是对同一类 runner 的能力标签。当前不发布 RV32、2-hart、vector 或 coverage 产物。
+当前 OpenC906 wrapper 是 RV64 单 hart Verilator smart_run flow；`rv64` / `rv64f` / `rv64fd` 是对同一类 runner 的能力标签。支持 `_cov` 与 `_cov_light` coverage 产物（Verilator 内建覆盖率，运行时通过 `+covfile=<path>` 写出 `coverage.dat`）。不发布 RV32、2-hart 或 vector 产物。
 
 | Artifact basename | Env var | `minimal` | `all` | Notes |
 | --- | --- | --- | --- | --- |
@@ -377,7 +377,7 @@ xiangshan_rv64_unaligned_1c_cov_light -> CX_RISCV_CORES_XIANGSHAN_RV64_UNALIGNED
 
 ### OpenC910
 
-当前 OpenC910 wrapper 是 RV64 smart_run flow，发布 1-hart (cx-build) 和 2-hart (cx-2hart-build) 两组产物；后端是 Verilator + CX_TRACE testbench。`rv64` / `rv64f` / `rv64fd` 是对同一类 runner 的能力标签。不发布 RV32、vector 或 coverage 产物。
+当前 OpenC910 wrapper 是 RV64 smart_run flow，发布 1-hart (cx-build) 和 2-hart (cx-2hart-build) 两组产物；后端是 Verilator + CX_TRACE testbench。`rv64` / `rv64f` / `rv64fd` 是对同一类 runner 的能力标签。支持 `_cov` 与 `_cov_light` coverage 产物（每个 hart 配置都各有一份）。不发布 RV32 或 vector 产物。
 
 | Artifact basename | Env var | `minimal` | `all` | Notes |
 | --- | --- | --- | --- | --- |
