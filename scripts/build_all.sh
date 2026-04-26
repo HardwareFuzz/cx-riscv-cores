@@ -553,8 +553,8 @@ build_openc910() {
   local cores="$2"
   local -a candidates=(rv64 rv64f rv64fd)
 
-  if [[ "${cores}" != "1" ]]; then
-    echo "[skip] openc910: only 1-core RV64 artifacts are supported"
+  if [[ "${cores}" != "1" && "${cores}" != "2" ]]; then
+    echo "[skip] openc910: only 1- and 2-core RV64 artifacts are supported"
     return 0
   fi
   if [[ "${COV_MODE}" != "none" ]]; then

@@ -198,7 +198,7 @@ curl -fsSL https://raw.githubusercontent.com/HardwareFuzz/cx-riscv-cores/main/sc
 - `cva6` 接受 `rv64fd` 作为过滤别名，但最终产物名仍然是 `cva6_rv64_*`
 - `boom` 使用 `cores/boom` 里的 Chipyard `main` 分支，不跟随其他 core 的 `cx-build` / `cx-2hart-build` 分支约定
 - `boom` 当前只发布 `rv64fd` provider；默认 `1c` / `2c` 都使用 `small` 配置；如果你要切换成 `medium` / `large`，直接运行 `cores/boom/build.sh --variant ...`
-- `openc906` / `openc910` 使用各自子仓库的 `cx-build` 分支；当前发布 `rv64` / `rv64f` / `rv64fd` 三个单 hart 命名标签，无 coverage
+- `openc906` 使用 `cx-build` 分支（单 hart，Verilator 后端，无 coverage）；`openc910` 同时使用 `cx-build`（单 hart）和 `cx-2hart-build`（双 hart），都是 Verilator 后端，无 coverage
 - `xiangshan` 的 `--isa` 目前只影响产物命名，不改变 RTL/config
 
 ### `scripts/generate_env.sh`
@@ -377,13 +377,16 @@ xiangshan_rv64_unaligned_1c_cov_light -> CX_RISCV_CORES_XIANGSHAN_RV64_UNALIGNED
 
 ### OpenC910
 
-当前 OpenC910 wrapper 是 RV64 单 hart smart_run flow；`rv64` / `rv64f` / `rv64fd` 是对同一类 runner 的能力标签。当前不发布 RV32、2-hart、vector 或 coverage 产物；coverage 需要等 Verilator testbench 的 CX_TRACE 路径接通后再发布。
+当前 OpenC910 wrapper 是 RV64 smart_run flow，发布 1-hart (cx-build) 和 2-hart (cx-2hart-build) 两组产物；后端是 Verilator + CX_TRACE testbench。`rv64` / `rv64f` / `rv64fd` 是对同一类 runner 的能力标签。不发布 RV32、vector 或 coverage 产物。
 
 | Artifact basename | Env var | `minimal` | `all` | Notes |
 | --- | --- | --- | --- | --- |
 | `openc910_rv64_1c` | `CX_RISCV_CORES_OPENC910_RV64_1C` | 是 | 是 | RV64、单 hart、无 coverage；来自 `cx-build` |
 | `openc910_rv64f_1c` | `CX_RISCV_CORES_OPENC910_RV64F_1C` | 是 | 是 | RV64F 标签、单 hart、无 coverage；来自 `cx-build` |
 | `openc910_rv64fd_1c` | `CX_RISCV_CORES_OPENC910_RV64FD_1C` | 是 | 是 | RV64FD 标签、单 hart、无 coverage；来自 `cx-build` |
+| `openc910_rv64_2c` | `CX_RISCV_CORES_OPENC910_RV64_2C` | 是 | 是 | RV64、双 hart、无 coverage；来自 `cx-2hart-build` |
+| `openc910_rv64f_2c` | `CX_RISCV_CORES_OPENC910_RV64F_2C` | 是 | 是 | RV64F 标签、双 hart、无 coverage；来自 `cx-2hart-build` |
+| `openc910_rv64fd_2c` | `CX_RISCV_CORES_OPENC910_RV64FD_2C` | 是 | 是 | RV64FD 标签、双 hart、无 coverage；来自 `cx-2hart-build` |
 
 ### XiangShan
 
