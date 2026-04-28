@@ -517,7 +517,7 @@ build_boom() {
     args+=(--isa "${isa}")
   done
   args+=(--cores "${cores}")
-  build_in_repo boom "main" "${args[@]}"
+  build_in_repo boom "cx-build" "${args[@]}"
 }
 
 build_openc906() {
