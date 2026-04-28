@@ -1,0 +1,6 @@
+extension,isa_bases,distinct_instructions,asm_occurrences,hdl_occurrences,core_hits,tests_hits,vendor_hits,evidence_kind,instructions,sample_files
+I,RV32;RV64,40,61,245,133,112,42,asm;hdl,add;addi;and;andi;auipc;beq;bge;bgeu;blt;bltu;bne;ebreak;ecall;fence;jal;jalr;lb;lbu;lh;lhu;lui;lw;or;ori;sb;sh;sll;slli;slt;slti;sltiu;sltu;sra;srai;srl;srli;sub;sw;xor;xori,rtl/core/kronos_EX.sv;rtl/core/kronos_ID.sv;rtl/core/kronos_types.sv;software/skiptrap/skiptrap.S;tests/unit/kronos_ID_unit_test.sv
+Zicsr,RV32;RV64,6,3,26,6,20,3,asm;hdl,csrrc;csrrci;csrrs;csrrsi;csrrw;csrrwi,riscv-tests/common/crt0.S;rtl/core/kronos_ID.sv;tests/unit/counters_unit_test.sv;tests/unit/csr_unit_test.sv;tests/unit/kronos_ID_unit_test.sv
+Sm,RV32;RV64,2,2,15,8,7,1,asm;hdl,mret;wfi,riscv-tests/common/crt0.S;rtl/core/kronos_EX.sv;rtl/core/kronos_ID.sv;rtl/core/kronos_types.sv;software/skiptrap/skiptrap.S
+M,RV32;RV64,1,0,3,3,0,0,hdl,div,rtl/platform/krz/krz_top.sv;rtl/platform/krz/krzboy.sv;rtl/platform/snowflake/snowflake_top.sv
+Zifencei,RV32;RV64,1,0,1,0,1,0,hdl,fence.i,tests/unit/kronos_ID_unit_test.sv

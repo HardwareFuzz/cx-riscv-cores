@@ -1,0 +1,8 @@
+extension,support_status,isa_bases,evidence_kind,distinct_instructions,sample_files,notes
+C,declared,,march,,,
+I,used,RV32;RV64,asm;hdl,add;addi;and;andi;auipc;beq;bge;bgeu;blt;bltu;bne;ebreak;fence;jal;jalr;lb;lbu;lh;lhu;lui;lw;or;ori;sb;sh;sll;slli;slt;slti;sltiu;sltu;sra;srai;srl;srli;sub;sw;xor;xori,firmware/start.S;picorv32.v;scripts/icestorm/firmware.S;scripts/presyn/firmware.S;scripts/smtbmc/opcode.v,
+M,used,RV32;RV64,asm;hdl,div;divu;mul;mulh;mulhsu;mulhu;rem;remu,firmware/start.S;picorv32.v;picosoc/icebreaker.v;picosoc/picosoc.v;testbench.v,
+Zca,declared,,march,,,
+Zcd,declared,,march,,,
+Zcf,declared,,march,,,
+Zicsr,declared,,march,,,
