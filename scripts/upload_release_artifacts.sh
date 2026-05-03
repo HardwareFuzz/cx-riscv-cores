@@ -174,35 +174,15 @@ for path in "${artifacts_to_upload[@]}"; do
 done
 gh release view "${release_tag}" --json assets > "${assets_json}"
 
-"${python_cmd}" - <<'PY' "${manifest_path}" "${assets_json}" "${updates_json}" "${manifest_name}" "${uploaded_names_path}"
+"${python_cmd}" - <<'PY' "${manifest_path}" "${updates_json}"
 import json
 import sys
 
 manifest_path = sys.argv[1]
-assets_info = json.load(open(sys.argv[2], encoding="utf-8"))
-updates = json.load(open(sys.argv[3], encoding="utf-8"))
-manifest_name = sys.argv[4]
-uploaded_names = {
-    line.strip()
-    for line in open(sys.argv[5], encoding="utf-8")
-    if line.strip()
-}
-
-try:
-    existing = json.load(open(manifest_path, encoding="utf-8"))
-except (FileNotFoundError, json.JSONDecodeError):
-    existing = {}
-
-assets = {a["name"]: a["id"] for a in assets_info.get("assets", []) if a.get("name") != manifest_name}
-manifest = {name: checksum for name, checksum in existing.items() if name in assets}
-manifest.update({
-    name: updates[name]
-    for name in uploaded_names
-    if name in assets and name in updates
-})
+updates = json.load(open(sys.argv[2], encoding="utf-8"))
 
 with open(manifest_path, "w", encoding="utf-8") as f:
-    json.dump(manifest, f, indent=2, sort_keys=True)
+    json.dump(updates, f, indent=2, sort_keys=True)
 PY
 
 echo "[upload] ${manifest_name}"
