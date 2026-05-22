@@ -10,7 +10,7 @@ Behavior:
   1. Upload the file to the release under a temporary asset name with curl progress.
   2. Optionally delete the old asset of the target name.
   3. Rename the temporary asset to the final asset name.
-  4. Verify the final asset exists on the release.
+  4. Download the final release asset and verify its size and SHA256.
 
 Why this exists:
   gh release upload --clobber deletes the old asset before uploading the new one.
@@ -27,6 +27,8 @@ Environment overrides:
   UPLOAD_RETRIES         Default: 3
   UPLOAD_RETRY_DELAY     Default: 10      (seconds)
   DELETE_RETRIES         Default: 3
+  VERIFY_RETRIES         Default: 3
+  VERIFY_RETRY_DELAY     Default: 5       (seconds)
 EOF
 }
 
@@ -45,6 +47,8 @@ RESOLVE_ENTRY="${CURL_RESOLVE_ENTRY:-}"
 UPLOAD_RETRIES="${UPLOAD_RETRIES:-3}"
 UPLOAD_RETRY_DELAY="${UPLOAD_RETRY_DELAY:-10}"
 DELETE_RETRIES="${DELETE_RETRIES:-3}"
+VERIFY_RETRIES="${VERIFY_RETRIES:-3}"
+VERIFY_RETRY_DELAY="${VERIFY_RETRY_DELAY:-5}"
 
 [[ -f "$FILE" ]] || { echo "ERROR: file not found: $FILE" >&2; exit 1; }
 command -v gh >/dev/null 2>&1 || { echo "ERROR: gh is required" >&2; exit 1; }
@@ -62,9 +66,31 @@ TOKEN="$(gh auth token)"
 TMP_RESP="$(mktemp)"
 FILE_SIZE="$(stat -c '%s' "$FILE")"
 ASSETS_API_PATH="repos/${REPO}/releases/${RELEASE_ID}/assets?per_page=100"
+VERIFY_TMP_DIR=""
+
+sha256_of() {
+  python3 - <<'PY' "$1"
+import hashlib
+import sys
+
+path = sys.argv[1]
+h = hashlib.sha256()
+with open(path, "rb") as f:
+    for chunk in iter(lambda: f.read(1024 * 1024), b""):
+        if not chunk:
+            break
+        h.update(chunk)
+print(h.hexdigest())
+PY
+}
+
+LOCAL_SHA256="$(sha256_of "$FILE")"
 
 cleanup() {
   rm -f "$TMP_RESP"
+  if [[ -n "${VERIFY_TMP_DIR}" ]]; then
+    rm -rf "${VERIFY_TMP_DIR}"
+  fi
 }
 trap cleanup EXIT
 
@@ -77,6 +103,7 @@ echo "low_speed=${LOW_SPEED_BPS}B/s for ${LOW_SPEED_TIME}s"
 [[ -n "${RESOLVE_ENTRY}" ]] && echo "resolve=${RESOLVE_ENTRY}"
 echo "retries=${UPLOAD_RETRIES}"
 echo "delete_retries=${DELETE_RETRIES}"
+echo "verify_retries=${VERIFY_RETRIES}"
 echo
 
 TMP_ASSET_ID=""
@@ -199,5 +226,48 @@ gh api \
   -f name="${ASSET_NAME}" >/dev/null
 
 echo "[4/4] Verify final asset"
-gh api --paginate "${ASSETS_API_PATH}" \
-  --jq ".[] | select(.name == \"${ASSET_NAME}\") | [.name, .updated_at, (.size|tostring), .browser_download_url] | @tsv"
+FINAL_ASSET_TSV="$(
+  gh api --paginate "${ASSETS_API_PATH}" \
+    --jq ".[] | select(.name == \"${ASSET_NAME}\") | [.name, .updated_at, (.size|tostring), .browser_download_url] | @tsv"
+)"
+if [[ -z "${FINAL_ASSET_TSV}" ]]; then
+  echo "ERROR: final asset ${ASSET_NAME} was not found after rename" >&2
+  exit 1
+fi
+printf '%s\n' "${FINAL_ASSET_TSV}"
+
+VERIFY_TMP_DIR="$(mktemp -d)"
+
+verify_attempt=1
+while (( verify_attempt <= VERIFY_RETRIES )); do
+  rm -f "${VERIFY_TMP_DIR}/${ASSET_NAME}"
+
+  if gh release download "${TAG}" -R "${REPO}" --pattern "${ASSET_NAME}" --dir "${VERIFY_TMP_DIR}" --clobber >/dev/null 2>&1; then
+    DOWNLOADED_FILE="${VERIFY_TMP_DIR}/${ASSET_NAME}"
+    if [[ -f "${DOWNLOADED_FILE}" ]]; then
+      DOWNLOADED_SIZE="$(stat -c '%s' "${DOWNLOADED_FILE}")"
+      DOWNLOADED_SHA256="$(sha256_of "${DOWNLOADED_FILE}")"
+      if [[ "${DOWNLOADED_SIZE}" == "${FILE_SIZE}" && "${DOWNLOADED_SHA256}" == "${LOCAL_SHA256}" ]]; then
+        printf 'verified_sha256=%s\n' "${LOCAL_SHA256}"
+        break
+      fi
+
+      echo "WARNING: verify attempt ${verify_attempt}/${VERIFY_RETRIES} downloaded asset mismatch" >&2
+      echo "  expected_size=${FILE_SIZE} actual_size=${DOWNLOADED_SIZE}" >&2
+      echo "  expected_sha256=${LOCAL_SHA256}" >&2
+      echo "  actual_sha256=${DOWNLOADED_SHA256}" >&2
+    else
+      echo "WARNING: verify attempt ${verify_attempt}/${VERIFY_RETRIES} did not produce ${ASSET_NAME}" >&2
+    fi
+  else
+    echo "WARNING: verify attempt ${verify_attempt}/${VERIFY_RETRIES} failed to download ${ASSET_NAME}" >&2
+  fi
+
+  if (( verify_attempt == VERIFY_RETRIES )); then
+    echo "ERROR: final asset ${ASSET_NAME} failed release-content verification" >&2
+    exit 1
+  fi
+
+  verify_attempt=$((verify_attempt + 1))
+  sleep "${VERIFY_RETRY_DELAY}"
+done
