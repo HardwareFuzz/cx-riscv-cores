@@ -358,7 +358,7 @@ xiangshan_rv64_unaligned_1c_cov_light -> CX_RISCV_CORES_XIANGSHAN_RV64_UNALIGNED
 
 - `1c` 默认产物使用 `small` 变体
 - `2c` 默认产物使用 `small` 变体
-- `cores/boom/build.sh --variant small|medium|large` 可以额外构建带变体标签的 wrapper，例如 `boom_rv64fd_large_1c`
+- `cores/boom/build.sh --variant small|medium|large` 可以额外构建带变体标签的 simulator ELF，例如 `boom_rv64fd_large_1c`
 
 | Artifact basename | Env var | `minimal` | `all` | Notes |
 | --- | --- | --- | --- | --- |
@@ -367,7 +367,7 @@ xiangshan_rv64_unaligned_1c_cov_light -> CX_RISCV_CORES_XIANGSHAN_RV64_UNALIGNED
 
 ### OpenC906
 
-当前 OpenC906 wrapper 是 RV64 单 hart Verilator smart_run flow；`rv64` / `rv64f` / `rv64fd` 是对同一类 runner 的能力标签。支持 `_cov` 与 `_cov_light` coverage 产物（Verilator 内建覆盖率，运行时通过 `+covfile=<path>` 写出 `coverage.dat`）。不发布 RV32、2-hart 或 vector 产物。
+当前 OpenC906 顶层产物是 RV64 单 hart Verilator smart_run 的真实 `Vtop` ELF；`rv64` / `rv64f` / `rv64fd` 是对同一类 simulator 的能力标签。支持 `_cov` 与 `_cov_light` coverage 产物（Verilator 内建覆盖率，运行时通过 `+covfile=<path>` 写出 `coverage.dat`）。运行前把 ELF 转成 `inst.pat` / `data.pat` 所需的 `Srec2vmem` 由 `scripts/stage_runtime_support.sh` 统一放到 artifacts 目录。不发布 RV32、2-hart 或 vector 产物。
 
 | Artifact basename | Env var | `minimal` | `all` | Notes |
 | --- | --- | --- | --- | --- |
@@ -377,7 +377,7 @@ xiangshan_rv64_unaligned_1c_cov_light -> CX_RISCV_CORES_XIANGSHAN_RV64_UNALIGNED
 
 ### OpenC910
 
-当前 OpenC910 wrapper 是 RV64 smart_run flow，发布 1-hart (cx-build) 和 2-hart (cx-2hart-build) 两组产物；后端是 Verilator + CX_TRACE testbench。`rv64` / `rv64f` / `rv64fd` 是对同一类 runner 的能力标签。支持 `_cov` 与 `_cov_light` coverage 产物（每个 hart 配置都各有一份）。不发布 RV32 或 vector 产物。
+当前 OpenC910 顶层产物是 RV64 smart_run 的真实 `Vtop` ELF，发布 1-hart (cx-build) 和 2-hart (cx-2hart-build) 两组产物；后端是 Verilator + CX_TRACE testbench。`rv64` / `rv64f` / `rv64fd` 是对同一类 simulator 的能力标签。支持 `_cov` 与 `_cov_light` coverage 产物（每个 hart 配置都各有一份）。运行前把 ELF 转成 `inst.pat` / `data.pat` 所需的 `Srec2vmem` 由 `scripts/stage_runtime_support.sh` 统一放到 artifacts 目录。不发布 RV32 或 vector 产物。
 
 | Artifact basename | Env var | `minimal` | `all` | Notes |
 | --- | --- | --- | --- | --- |
@@ -421,10 +421,13 @@ xiangshan_rv64_unaligned_1c_cov_light -> CX_RISCV_CORES_XIANGSHAN_RV64_UNALIGNED
 
 ### Runtime Support
 
-这两项不是 wrapper 可执行文件，而是 `scripts/stage_runtime_support.sh` 复制进统一产物目录的运行时依赖。
+这些文件不是主 simulator 可执行文件，而是 `scripts/stage_runtime_support.sh` 复制进统一产物目录的运行时依赖。
 
 | Artifact basename | Env var | `minimal` | `all` | Notes |
 | --- | --- | --- | --- | --- |
+| `boom_dramsim2_system.ini` | `CX_RISCV_CORES_BOOM_DRAMSIM2_SYSTEM_INI` | 是 | 是 | BOOM DRAMSim runtime support；运行时会和下面那份 ini 组合成 `dramsim2_ini/` 目录 |
+| `boom_dramsim2_DDR3_micron_64M_8B_x4_sg15.ini` | `CX_RISCV_CORES_BOOM_DRAMSIM2_DDR3_MICRON_64M_8B_X4_SG15_INI` | 是 | 是 | BOOM DRAMSim runtime support |
+| `openc_srec2vmem` | `CX_RISCV_CORES_OPENC_SREC2VMEM` | 是 | 是 | OpenC906/OpenC910 共同使用的 `Srec2vmem` |
 | `xiangshan_difftest_rv64_1c_so` | `CX_RISCV_CORES_XIANGSHAN_DIFFTEST_RV64_1C_SO` | 是 | 是 | 来自 `cores/XiangShan/ready-to-run/riscv64-nemu-interpreter-so` |
 | `xiangshan_difftest_rv64_2c_so` | `CX_RISCV_CORES_XIANGSHAN_DIFFTEST_RV64_2C_SO` | 是 | 是 | 来自 `cores/XiangShan/ready-to-run/riscv64-nemu-interpreter-dual-so` |
 

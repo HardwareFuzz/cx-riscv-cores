@@ -684,9 +684,7 @@ if [[ "${CORES_MODE}" == "2" || "${CORES_MODE}" == "both" ]]; then
   build_set "cx-2hart-build" "2"
 fi
 
-if (( WITH_XIANGSHAN )) && contains_core XiangShan; then
-  stage_runtime_support
-fi
+stage_runtime_support
 
 echo
 echo "Artifacts:"

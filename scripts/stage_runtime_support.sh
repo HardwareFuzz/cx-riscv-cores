@@ -8,8 +8,8 @@ usage() {
   cat <<'EOF'
 Usage: ./scripts/stage_runtime_support.sh [--artifact-dir DIR]
 
-Copy non-wrapper runtime support files into the unified artifact directory so
-consumers only need one root: <artifact-dir>/.
+Copy runtime support files into the unified artifact directory so consumers
+only need one root: <artifact-dir>/.
 EOF
 }
 
@@ -41,6 +41,7 @@ mkdir -p "${ARTIFACT_DIR}"
 stage_one() {
   local src="$1"
   local dst_name="$2"
+  local mode="${3:-data}"
   if [[ ! -f "${src}" ]]; then
     echo "[warn] missing runtime support file: ${src}" >&2
     return 0
@@ -48,9 +49,18 @@ stage_one() {
 
   local dst="${ARTIFACT_DIR}/${dst_name}"
   cp -f "${src}" "${dst}"
+  if [[ "${mode}" == "executable" ]]; then
+    chmod 0755 "${dst}"
+  fi
   echo "[stage] ${dst_name} <- ${src}"
 }
 
 XIANGSHAN_READY_TO_RUN="${ROOT_DIR}/cores/XiangShan/ready-to-run"
 stage_one "${XIANGSHAN_READY_TO_RUN}/riscv64-nemu-interpreter-so" "xiangshan_difftest_rv64_1c_so"
 stage_one "${XIANGSHAN_READY_TO_RUN}/riscv64-nemu-interpreter-dual-so" "xiangshan_difftest_rv64_2c_so"
+
+BOOM_DRAMSIM_DIR="${ROOT_DIR}/cores/boom/generators/testchipip/src/main/resources/dramsim2_ini"
+stage_one "${BOOM_DRAMSIM_DIR}/system.ini" "boom_dramsim2_system.ini"
+stage_one "${BOOM_DRAMSIM_DIR}/DDR3_micron_64M_8B_x4_sg15.ini" "boom_dramsim2_DDR3_micron_64M_8B_x4_sg15.ini"
+
+stage_one "${ROOT_DIR}/cores/openc906/smart_run/tests/bin/Srec2vmem" "openc_srec2vmem" "executable"
