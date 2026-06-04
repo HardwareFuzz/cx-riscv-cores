@@ -352,18 +352,27 @@ xiangshan_rv64_unaligned_1c_cov_light -> CX_RISCV_CORES_XIANGSHAN_RV64_UNALIGNED
 | `rocket-chip_rv32f_1c` | `CX_RISCV_CORES_ROCKET_CHIP_RV32F_1C` | 是 | 是 | 默认最小矩阵也会构建 |
 | `rocket-chip_rv32f_2c` | `CX_RISCV_CORES_ROCKET_CHIP_RV32F_2C` | 是 | 是 | 默认最小矩阵也会构建 |
 
+`rocket-chip` 当前所有发布的 ISA 标签都走对应的 max-extension trace config：
+
+- `rv64fd`：`B + Zicond + FP16 + FD + H`
+- `rv64f`：`B + Zicond + FP16 + F + H`
+- `rv64`：`B + Zicond + H`，保持无 FPU
+- `rv32fd` / `rv32f` / `rv32`：沿用已有的 RV32 max-extension configs
+
 ### BOOM
 
-`boom` 的默认 provider 基于 Chipyard BOOM V3 trace 配置：
+`boom` 的默认 provider 现在基于 Chipyard BOOM V4 trace 配置：
 
 - `1c` 默认产物使用 `small` 变体
 - `2c` 默认产物使用 `small` 变体
 - `cores/boom/build.sh --variant small|medium|large` 可以额外构建带变体标签的 simulator ELF，例如 `boom_rv64fd_large_1c`
+- 默认 provider 保留 `F/D` 与 trace 输出，并切到源码里实际接入了 `B_table` 的 v4 decode
+- 重新构建并替换 `artifacts/boom_rv64fd_{1c,2c}` 后，运行时已确认默认 provider 支持 `Zicond`、`Zfh/Zfhmin`、`Zbc`、`Zbkx`、`Zicbom/Zicboz` 以及 `Zkn/Zknd/Zkne/Zknh/Zksed/Zksh`
 
 | Artifact basename | Env var | `minimal` | `all` | Notes |
 | --- | --- | --- | --- | --- |
-| `boom_rv64fd_1c` | `CX_RISCV_CORES_BOOM_RV64FD_1C` | 是 | 是 | 默认单核 provider；底层配置是 `CXBoomSmallV3TraceConfig` |
-| `boom_rv64fd_2c` | `CX_RISCV_CORES_BOOM_RV64FD_2C` | 是 | 是 | 默认双核 provider；底层配置是 `CXBoomDualSmallV3TraceConfig` |
+| `boom_rv64fd_1c` | `CX_RISCV_CORES_BOOM_RV64FD_1C` | 是 | 是 | 默认单核 provider；底层配置是 `CXBoomSmallV4TraceConfig` |
+| `boom_rv64fd_2c` | `CX_RISCV_CORES_BOOM_RV64FD_2C` | 是 | 是 | 默认双核 provider；底层配置是 `CXBoomDualSmallV4TraceConfig` |
 
 ### OpenC906
 
