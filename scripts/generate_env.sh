@@ -14,7 +14,7 @@ the artifact basenames:
   <artifact basename> -> CX_RISCV_CORES_<UPPER_SNAKE_BASENAME>
 
 Examples:
-  cva6_rv32_1c              -> CX_RISCV_CORES_CVA6_RV32_1C
+  cva6_rv32f_1c             -> CX_RISCV_CORES_CVA6_RV32F_1C
   rocket-chip_rv64fd_2c     -> CX_RISCV_CORES_ROCKET_CHIP_RV64FD_2C
   xiangshan_difftest_rv64_1c_so -> CX_RISCV_CORES_XIANGSHAN_DIFFTEST_RV64_1C_SO
 EOF

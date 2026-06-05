@@ -19,7 +19,8 @@ Options:
   --cores <1|2|both>    Build 1-core, 2-core, or both (default: both)
   --matrix <minimal|all>
                         Variant matrix to build (default: minimal)
-                        - minimal: all non-XiangShan ISA variants, plus XiangShan fast defaults
+                        - minimal: all non-XiangShan ISA variants after dropping plain no-FPU labels,
+                                   plus XiangShan fast defaults
                         - all: build all supported ISA/preset combinations
   --isa PATTERN         Limit ISA tags to build. May be specified multiple times.
                         Supports shell globs (quote if needed), e.g. --isa 'rv32*'
@@ -373,7 +374,17 @@ build_in_repo() {
 
   ensure_submodule "cores/${name}"
   checkout_branch "${repo_dir}" "${branch}"
-  run git -C "${repo_dir}" submodule update --init --recursive
+  case "${name}" in
+    boom)
+      # Chipyard/BOOM ships a targeted submodule bootstrap script. A blind
+      # recursive update pulls optional trees such as Ara's llvm-project,
+      # which is unnecessary for the BOOM simulator builds we publish here.
+      run bash -lc "cd '${repo_dir}' && ./scripts/init-submodules-no-riscv-tools-nolog.sh"
+      ;;
+    *)
+      run git -C "${repo_dir}" submodule update --init --recursive
+      ;;
+  esac
 
   local build_cmd=("./build.sh")
   build_cmd+=("$@")
@@ -448,9 +459,9 @@ build_vexriscv() {
   local cores="$2"
   local -a candidates=()
   if [[ "${cores}" == "1" ]]; then
-    candidates=(rv32 rv32f rv32fd)
+    candidates=(rv32f rv32fd)
   else
-    candidates=(rv32 rv32fd)
+    candidates=(rv32fd)
   fi
 
   mapfile -t candidates < <(filter_isas VexRiscv "${candidates[@]}")
@@ -466,12 +477,31 @@ build_vexriscv() {
 build_cva6() {
   local branch="$1"
   local cores="$2"
-  local -a candidates=(rv64 rv32 rv32f)
+  local -a candidates=(rv64fd rv32f)
+  local cov_suf
+  cov_suf="$(cov_suffix)"
 
   mapfile -t candidates < <(filter_isas cva6 "${candidates[@]}")
   if (( ${#candidates[@]} == 0 )); then
     echo "[skip] cva6: no ISA matches --isa filter"
     return 0
+  fi
+
+  if (( CLEAN )); then
+    for isa in "${candidates[@]}"; do
+      case "${isa}" in
+        rv64fd)
+          run rm -f \
+            "${OUT_DIR}/cva6_rv64fd_${cores}c${cov_suf}" \
+            "${OUT_DIR}/cva6_rv64_${cores}c${cov_suf}"
+          ;;
+        rv32f)
+          run rm -f \
+            "${OUT_DIR}/cva6_rv32f_${cores}c${cov_suf}" \
+            "${OUT_DIR}/cva6_rv32_${cores}c${cov_suf}"
+          ;;
+      esac
+    done
   fi
 
   local -a args=()
@@ -480,12 +510,50 @@ build_cva6() {
   done
   args+=(--cores "${cores}")
   build_in_repo cva6 "${branch}" "${args[@]}"
+
+  for isa in "${candidates[@]}"; do
+    local src=""
+    local dst=""
+    case "${isa}" in
+      rv64fd)
+        dst="${OUT_DIR}/cva6_rv64fd_${cores}c${cov_suf}"
+        if [[ -e "${OUT_DIR}/cva6_rv64fd_${cores}c${cov_suf}" ]]; then
+          src="${OUT_DIR}/cva6_rv64fd_${cores}c${cov_suf}"
+        elif [[ -e "${OUT_DIR}/cva6_rv64_${cores}c${cov_suf}" ]]; then
+          src="${OUT_DIR}/cva6_rv64_${cores}c${cov_suf}"
+        else
+          die "cva6 build did not produce an rv64fd artifact for ${cores}c"
+        fi
+        ;;
+      rv32f)
+        dst="${OUT_DIR}/cva6_rv32f_${cores}c${cov_suf}"
+        if [[ -e "${OUT_DIR}/cva6_rv32f_${cores}c${cov_suf}" ]]; then
+          src="${OUT_DIR}/cva6_rv32f_${cores}c${cov_suf}"
+        elif [[ -e "${OUT_DIR}/cva6_rv32_${cores}c${cov_suf}" ]]; then
+          src="${OUT_DIR}/cva6_rv32_${cores}c${cov_suf}"
+        else
+          die "cva6 build did not produce an rv32f artifact for ${cores}c"
+        fi
+        ;;
+      *)
+        die "internal: unexpected cva6 isa '${isa}'"
+        ;;
+    esac
+
+    if [[ "${src}" != "${dst}" ]]; then
+      if (( DRY_RUN )); then
+        echo "+ mv -f ${src} ${dst}"
+      else
+        mv -f "${src}" "${dst}"
+      fi
+    fi
+  done
 }
 
 build_rocket_chip() {
   local branch="$1"
   local cores="$2"
-  local -a candidates=(rv64fd rv64f rv64 rv32fd rv32f rv32)
+  local -a candidates=(rv64fd rv64f rv32fd rv32f)
 
   mapfile -t candidates < <(filter_isas rocket-chip "${candidates[@]}")
   if (( ${#candidates[@]} == 0 )); then
@@ -523,7 +591,7 @@ build_boom() {
 build_openc906() {
   local branch="$1"
   local cores="$2"
-  local -a candidates=(rv64 rv64f rv64fd)
+  local -a candidates=(rv64f rv64fd)
 
   if [[ "${cores}" != "1" ]]; then
     echo "[skip] openc906: only 1-core RV64 artifacts are supported"
@@ -547,7 +615,7 @@ build_openc906() {
 build_openc910() {
   local branch="$1"
   local cores="$2"
-  local -a candidates=(rv64 rv64f rv64fd)
+  local -a candidates=(rv64f rv64fd)
 
   if [[ "${cores}" != "1" && "${cores}" != "2" ]]; then
     echo "[skip] openc910: only 1- and 2-core RV64 artifacts are supported"
@@ -573,9 +641,9 @@ build_xiangshan() {
   local cores="$2"
   local -a isas=()
   if [[ "${MATRIX_MODE}" == "all" || ${#ISA_FILTERS[@]} -gt 0 ]]; then
-    isas=(rv64 rv64f rv64fd)
+    isas=(rv64fd rv64f)
   else
-    isas=(rv64)
+    isas=(rv64fd)
   fi
 
   mapfile -t isas < <(filter_isas XiangShan "${isas[@]}")
