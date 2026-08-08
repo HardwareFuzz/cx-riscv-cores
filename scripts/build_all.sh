@@ -15,7 +15,8 @@ Options:
                         Default: origin
                         - auto: prefer an existing local branch; otherwise use origin/<branch>
                         - local: require/use a local branch if it exists, else create it from origin/<branch>
-                        - origin: always reset local branch to origin/<branch>
+                        - origin: use origin/<branch>; reset an unowned local branch,
+                                  or require an existing branch worktree to be clean/exact
   --cores <1|2|both>    Build 1-core, 2-core, or both (default: both)
   --matrix <minimal|all>
                         Variant matrix to build (default: minimal)
@@ -157,11 +158,13 @@ LOG_DIR="${LOG_DIR_OPT:-${ROOT_DIR}/logs/${DATE_TAG}}"
 
 mkdir -p "${OUT_DIR}" "${LOG_DIR}"
 
-# Remove F-only providers superseded by matching FD providers. This also keeps
-# stale outputs from an older matrix out of release uploads.
-prune_superseded_f_artifacts() {
+# Remove superseded provider names before every matrix build. This keeps stale
+# outputs from an older matrix out of release uploads even without --clean.
+prune_superseded_artifacts() {
   local -a basenames=(
     vexriscv_rv32f_1c
+    cva6_rv32_1c cva6_rv32_2c
+    cva6_rv64_1c cva6_rv64_2c
     rocket-chip_rv32f_1c rocket-chip_rv32f_2c
     rocket-chip_rv64f_1c rocket-chip_rv64f_2c
     openc906_rv64f_1c
@@ -181,7 +184,7 @@ prune_superseded_f_artifacts() {
   done
 }
 
-prune_superseded_f_artifacts
+prune_superseded_artifacts
 
 run() {
   if (( DRY_RUN )); then
@@ -214,9 +217,62 @@ ensure_submodule() {
   run git -C "${ROOT_DIR}" submodule update --init "${relpath}"
 }
 
+# Set by checkout_branch to the worktree that actually owns the requested
+# branch.  Development checkouts keep 1c/2c branches in linked worktrees; Git
+# correctly refuses to check the same branch out a second time in cores/<name>.
+CHECKED_OUT_REPO_DIR=""
+
+branch_worktree() {
+  local repo_dir="$1"
+  local branch="$2"
+  local worktree_path=""
+  local line
+
+  # A submodule's primary worktree may be reported as its gitdir under
+  # .git/modules rather than the checked-out cores/<name> path.  Prefer the
+  # caller's known working-tree path when it already owns the branch.
+  if [[ "$(git -C "${repo_dir}" symbolic-ref --quiet --short HEAD 2>/dev/null || true)" == "${branch}" ]]; then
+    printf '%s\n' "${repo_dir}"
+    return 0
+  fi
+
+  while IFS= read -r line; do
+    case "${line}" in
+      "worktree "*) worktree_path="${line#worktree }" ;;
+      "branch refs/heads/${branch}")
+        printf '%s\n' "${worktree_path}"
+        return 0
+        ;;
+    esac
+  done < <(git -C "${repo_dir}" worktree list --porcelain)
+  return 1
+}
+
 checkout_branch() {
   local repo_dir="$1"
   local branch="$2"
+  local existing_worktree=""
+
+  CHECKED_OUT_REPO_DIR="${repo_dir}"
+  existing_worktree="$(branch_worktree "${repo_dir}" "${branch}" || true)"
+  if [[ -n "${existing_worktree}" ]]; then
+    CHECKED_OUT_REPO_DIR="${existing_worktree}"
+    if [[ "${BRANCH_SOURCE}" == "origin" ]]; then
+      run git -C "${repo_dir}" fetch origin --prune
+      git -C "${repo_dir}" rev-parse --verify --quiet "refs/remotes/origin/${branch}" >/dev/null \
+        || die "${repo_dir}: missing origin/${branch}"
+      if (( ! DRY_RUN )); then
+        local local_head remote_head
+        local_head="$(git -C "${existing_worktree}" rev-parse HEAD)"
+        remote_head="$(git -C "${repo_dir}" rev-parse "refs/remotes/origin/${branch}")"
+        [[ "${local_head}" == "${remote_head}" ]] \
+          || die "${existing_worktree}: ${branch} is not at origin/${branch}; sync it before an origin build"
+        [[ -z "$(git -C "${existing_worktree}" status --porcelain)" ]] \
+          || die "${existing_worktree}: origin builds require a clean worktree"
+      fi
+    fi
+    return 0
+  fi
 
   local has_local=0
   local has_remote=0
@@ -331,7 +387,7 @@ isa_aliases_for_core() {
     # CVA6 treats rv64fd as an alias of rv64; accept both in filters.
     cva6)
       case "${isa}" in
-        rv64) printf '%s\n' rv64 rv64fd ;;
+        rv64|rv64fd) printf '%s\n' rv64 rv64fd ;;
         *) printf '%s\n' "${isa}" ;;
       esac
       ;;
@@ -400,6 +456,7 @@ build_in_repo() {
 
   ensure_submodule "cores/${name}"
   checkout_branch "${repo_dir}" "${branch}"
+  repo_dir="${CHECKED_OUT_REPO_DIR}"
   case "${name}" in
     boom)
       # Chipyard/BOOM ships a targeted submodule bootstrap script. A blind
@@ -531,6 +588,16 @@ build_cva6() {
   done
   args+=(--cores "${cores}")
   build_in_repo cva6 "${branch}" "${args[@]}"
+
+  # A dry run intentionally does not create artifacts.  Keep it useful for
+  # inspecting the complete matrix instead of failing the post-build
+  # canonical-name check on the first CVA6 tuple.
+  if (( DRY_RUN )); then
+    for isa in "${candidates[@]}"; do
+      echo "+ verify ${OUT_DIR}/cva6_${isa}_${cores}c${cov_suf}"
+    done
+    return 0
+  fi
 
   for isa in "${candidates[@]}"; do
     local src=""
