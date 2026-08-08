@@ -194,8 +194,8 @@ curl -fsSL https://raw.githubusercontent.com/HardwareFuzz/cx-riscv-cores/main/sc
 - `build_all.sh` 的 `1c` 和 `2c` 是通过切到 `cx-build` / `cx-2hart-build` 两个分支分别构建出来的
 - `picorv32` 和 `kronos` 的 `1c` / `2c` 能力就是这样拼出来的，不是单个分支同时支持两者
 - `ibex` 只支持 `rv32imc`
-- `vexriscv` 的 `2c` 不支持 `rv32f`
-- 对于同时支持 plain / `f` / `fd` 标签的 core，`build_all.sh` 和对应子仓库 `build.sh` 现在都只发布带 `f` / `fd` 的标签，不再保留 plain `rv32` / `rv64`
+- 对于同一 core、XLEN、hart 数和 preset，如果已有 `fd` provider，统一矩阵不再构建或发布只有 `f` 的 provider
+- `rv32f` 仅在没有对应 `rv32fd` provider 时保留；当前即 CVA6 的 RV32 配置
 - `cva6` 的统一发布矩阵现在只保留 `rv32f_*` / `rv64fd_*`，不再保留 plain `rv32_*` / `rv64_*`
 - `boom` 使用 `cores/boom` 里的 Chipyard `main` 分支，不跟随其他 core 的 `cx-build` / `cx-2hart-build` 分支约定
 - `boom` 当前只发布 `rv64fd` provider；默认 `1c` / `2c` 都使用 `small` 配置；如果你要切换成 `medium` / `large`，直接运行 `cores/boom/build.sh --variant ...`
@@ -318,7 +318,6 @@ xiangshan_rv64fd_unaligned_1c_cov_light -> CX_RISCV_CORES_XIANGSHAN_RV64FD_UNALI
 | Artifact basename | Env var | `minimal` | `all` | Notes |
 | --- | --- | --- | --- | --- |
 | `vexriscv_rv32fd_1c` | `CX_RISCV_CORES_VEXRISCV_RV32FD_1C` | 是 | 是 | 默认 1-core 产物 |
-| `vexriscv_rv32f_1c` | `CX_RISCV_CORES_VEXRISCV_RV32F_1C` | 是 | 是 | 只支持 `1c`；子仓库 `build.sh` 也不再接受 plain `rv32` |
 | `vexriscv_rv32fd_2c` | `CX_RISCV_CORES_VEXRISCV_RV32FD_2C` | 是 | 是 | 默认 2-core 产物 |
 
 ### CVA6
@@ -338,20 +337,15 @@ xiangshan_rv64fd_unaligned_1c_cov_light -> CX_RISCV_CORES_XIANGSHAN_RV64FD_UNALI
 | --- | --- | --- | --- | --- |
 | `rocket-chip_rv64fd_1c` | `CX_RISCV_CORES_ROCKET_CHIP_RV64FD_1C` | 是 | 是 | 默认产物 |
 | `rocket-chip_rv64fd_2c` | `CX_RISCV_CORES_ROCKET_CHIP_RV64FD_2C` | 是 | 是 | 默认产物 |
-| `rocket-chip_rv64f_1c` | `CX_RISCV_CORES_ROCKET_CHIP_RV64F_1C` | 是 | 是 | 默认最小矩阵也会构建 |
-| `rocket-chip_rv64f_2c` | `CX_RISCV_CORES_ROCKET_CHIP_RV64F_2C` | 是 | 是 | 默认最小矩阵也会构建 |
 | `rocket-chip_rv32fd_1c` | `CX_RISCV_CORES_ROCKET_CHIP_RV32FD_1C` | 是 | 是 | 默认最小矩阵也会构建 |
 | `rocket-chip_rv32fd_2c` | `CX_RISCV_CORES_ROCKET_CHIP_RV32FD_2C` | 是 | 是 | 默认最小矩阵也会构建 |
-| `rocket-chip_rv32f_1c` | `CX_RISCV_CORES_ROCKET_CHIP_RV32F_1C` | 是 | 是 | 默认最小矩阵也会构建 |
-| `rocket-chip_rv32f_2c` | `CX_RISCV_CORES_ROCKET_CHIP_RV32F_2C` | 是 | 是 | 默认最小矩阵也会构建 |
 
 `rocket-chip` 当前由 `build_all.sh` 发布的 ISA 标签都走对应的 max-extension trace config：
 
 - `rv64fd`：`B + Zicond + FP16 + FD + H`
-- `rv64f`：`B + Zicond + FP16 + F + H`
-- `rv32fd` / `rv32f`：沿用已有的 RV32 max-extension configs
+- `rv32fd`：沿用已有的 RV32 max-extension config
 
-`rocket-chip` 子仓库 `build.sh` 现在也只接受这四个带 `f` / `fd` 的标签，不再单独发布 plain `rv64` / `rv32`。
+顶层统一矩阵只请求 `rv64fd` / `rv32fd`。子仓库可能仍接受其他标签，但不会由 `build_all.sh` 发布。
 
 ### BOOM
 
@@ -370,42 +364,31 @@ xiangshan_rv64fd_unaligned_1c_cov_light -> CX_RISCV_CORES_XIANGSHAN_RV64FD_UNALI
 
 ### OpenC906
 
-当前 OpenC906 顶层产物是 RV64 单 hart Verilator smart_run 的真实 `Vtop` ELF；`rv64f` / `rv64fd` 是对同一类 simulator 的能力标签。支持 `_cov` 与 `_cov_light` coverage 产物（Verilator 内建覆盖率，运行时通过 `+covfile=<path>` 写出 `coverage.dat`）。运行前把 ELF 转成 `inst.pat` / `data.pat` 所需的 `Srec2vmem` 由 `scripts/stage_runtime_support.sh` 统一放到 artifacts 目录。不发布 RV32、2-hart 或 vector 产物。
+当前 OpenC906 顶层产物是 RV64 单 hart Verilator smart_run 的真实 `Vtop` ELF，统一矩阵只发布能力更完整的 `rv64fd` 标签。支持 `_cov` 与 `_cov_light` coverage 产物（Verilator 内建覆盖率，运行时通过 `+covfile=<path>` 写出 `coverage.dat`）。运行前把 ELF 转成 `inst.pat` / `data.pat` 所需的 `Srec2vmem` 由 `scripts/stage_runtime_support.sh` 统一放到 artifacts 目录。不发布 RV32、2-hart 或 vector 产物。
 
 | Artifact basename | Env var | `minimal` | `all` | Notes |
 | --- | --- | --- | --- | --- |
-| `openc906_rv64f_1c` | `CX_RISCV_CORES_OPENC906_RV64F_1C` | 是 | 是 | RV64F 标签、单 hart、无 coverage；来自 `cx-build` |
 | `openc906_rv64fd_1c` | `CX_RISCV_CORES_OPENC906_RV64FD_1C` | 是 | 是 | RV64FD 标签、单 hart、无 coverage；来自 `cx-build` |
 
 ### OpenC910
 
-当前 OpenC910 顶层产物是 RV64 smart_run 的真实 `Vtop` ELF，发布 1-hart (cx-build) 和 2-hart (cx-2hart-build) 两组产物；后端是 Verilator + CX_TRACE testbench。`rv64f` / `rv64fd` 是对同一类 simulator 的能力标签。支持 `_cov` 与 `_cov_light` coverage 产物（每个 hart 配置都各有一份）。运行前把 ELF 转成 `inst.pat` / `data.pat` 所需的 `Srec2vmem` 由 `scripts/stage_runtime_support.sh` 统一放到 artifacts 目录。不发布 RV32 或 vector 产物。
+当前 OpenC910 顶层产物是 RV64 smart_run 的真实 `Vtop` ELF，发布 1-hart (`cx-build`) 和 2-hart (`cx-2hart-build`) 两组 `rv64fd` 产物；后端是 Verilator + CX_TRACE testbench。支持 `_cov` 与 `_cov_light` coverage 产物（每个 hart 配置都各有一份）。运行前把 ELF 转成 `inst.pat` / `data.pat` 所需的 `Srec2vmem` 由 `scripts/stage_runtime_support.sh` 统一放到 artifacts 目录。不发布 RV32 或 vector 产物。
 
 | Artifact basename | Env var | `minimal` | `all` | Notes |
 | --- | --- | --- | --- | --- |
-| `openc910_rv64f_1c` | `CX_RISCV_CORES_OPENC910_RV64F_1C` | 是 | 是 | RV64F 标签、单 hart、无 coverage；来自 `cx-build` |
 | `openc910_rv64fd_1c` | `CX_RISCV_CORES_OPENC910_RV64FD_1C` | 是 | 是 | RV64FD 标签、单 hart、无 coverage；来自 `cx-build` |
-| `openc910_rv64f_2c` | `CX_RISCV_CORES_OPENC910_RV64F_2C` | 是 | 是 | RV64F 标签、双 hart、无 coverage；来自 `cx-2hart-build` |
 | `openc910_rv64fd_2c` | `CX_RISCV_CORES_OPENC910_RV64FD_2C` | 是 | 是 | RV64FD 标签、双 hart、无 coverage；来自 `cx-2hart-build` |
 
 ### XiangShan
 
-`xiangshan` 的 `--isa` 目前只影响文件名，不改变实际 RTL/config。子仓库 `build.sh` 和 `build_all.sh` 现在都只发布 `rv64f_*` / `rv64fd_*` 这两组标签，不再发布 plain `rv64_*`。
+`xiangshan` 的 `--isa` 目前只影响文件名，不改变实际 RTL/config。`build_all.sh` 只发布 canonical `rv64fd_*` 标签，不再生成 `rv64f_*` 复制别名。
 
-更准确地说：
-
-- `rv64fd*` 这组是 `build_all.sh` 的 canonical XiangShan 发布标签
-- `rv64f*` 这些文件是 `build_all.sh` 在构建完成后通过 `cp -f` 复制出来的别名文件，不是额外的 RTL build
 - 当前源码里 `TLMinimalConfig` 默认就启用了硬件 misaligned load/store，所以 `default` 和 `unaligned` 在配置语义上等价；仓库现在统一只保留显式 `unaligned` 标签，避免重复和歧义
 
 | Artifact basename | Env var | `minimal` | `all` | Notes |
 | --- | --- | --- | --- | --- |
-| `xiangshan_rv64f_aligned_1c` | `CX_RISCV_CORES_XIANGSHAN_RV64F_ALIGNED_1C` | 否 | 是 | 由同 preset 的 `rv64fd` canonical 产物复制生成 |
-| `xiangshan_rv64f_aligned_2c` | `CX_RISCV_CORES_XIANGSHAN_RV64F_ALIGNED_2C` | 否 | 是 | 由同 preset 的 `rv64fd` canonical 产物复制生成 |
 | `xiangshan_rv64fd_aligned_1c` | `CX_RISCV_CORES_XIANGSHAN_RV64FD_ALIGNED_1C` | 否 | 是 | `aligned` preset 的 canonical 发布标签 |
 | `xiangshan_rv64fd_aligned_2c` | `CX_RISCV_CORES_XIANGSHAN_RV64FD_ALIGNED_2C` | 否 | 是 | `aligned` preset 的 canonical 发布标签 |
-| `xiangshan_rv64f_unaligned_1c` | `CX_RISCV_CORES_XIANGSHAN_RV64F_UNALIGNED_1C` | 否 | 是 | 由同 preset 的 `rv64fd` canonical 产物复制生成 |
-| `xiangshan_rv64f_unaligned_2c` | `CX_RISCV_CORES_XIANGSHAN_RV64F_UNALIGNED_2C` | 否 | 是 | 由同 preset 的 `rv64fd` canonical 产物复制生成 |
 | `xiangshan_rv64fd_unaligned_1c` | `CX_RISCV_CORES_XIANGSHAN_RV64FD_UNALIGNED_1C` | 是 | 是 | `unaligned` preset 的 canonical 发布标签；这是默认最小矩阵下的 XiangShan 产物 |
 | `xiangshan_rv64fd_unaligned_2c` | `CX_RISCV_CORES_XIANGSHAN_RV64FD_UNALIGNED_2C` | 是 | 是 | `unaligned` preset 的 canonical 发布标签；这是默认最小矩阵下的 XiangShan 产物 |
 

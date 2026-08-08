@@ -157,6 +157,32 @@ LOG_DIR="${LOG_DIR_OPT:-${ROOT_DIR}/logs/${DATE_TAG}}"
 
 mkdir -p "${OUT_DIR}" "${LOG_DIR}"
 
+# Remove F-only providers superseded by matching FD providers. This also keeps
+# stale outputs from an older matrix out of release uploads.
+prune_superseded_f_artifacts() {
+  local -a basenames=(
+    vexriscv_rv32f_1c
+    rocket-chip_rv32f_1c rocket-chip_rv32f_2c
+    rocket-chip_rv64f_1c rocket-chip_rv64f_2c
+    openc906_rv64f_1c
+    openc910_rv64f_1c openc910_rv64f_2c
+    xiangshan_rv64f_aligned_1c xiangshan_rv64f_aligned_2c
+    xiangshan_rv64f_unaligned_1c xiangshan_rv64f_unaligned_2c
+  )
+  local base suffix
+  for base in "${basenames[@]}"; do
+    for suffix in "" _cov _cov_light; do
+      if (( DRY_RUN )); then
+        echo "+ rm -f -- ${OUT_DIR}/${base}${suffix}"
+      else
+        rm -f -- "${OUT_DIR}/${base}${suffix}"
+      fi
+    done
+  done
+}
+
+prune_superseded_f_artifacts
+
 run() {
   if (( DRY_RUN )); then
     printf '+'
@@ -457,12 +483,7 @@ build_ibex() {
 build_vexriscv() {
   local branch="$1"
   local cores="$2"
-  local -a candidates=()
-  if [[ "${cores}" == "1" ]]; then
-    candidates=(rv32f rv32fd)
-  else
-    candidates=(rv32fd)
-  fi
+  local -a candidates=(rv32fd)
 
   mapfile -t candidates < <(filter_isas VexRiscv "${candidates[@]}")
   if (( ${#candidates[@]} == 0 )); then
@@ -553,7 +574,7 @@ build_cva6() {
 build_rocket_chip() {
   local branch="$1"
   local cores="$2"
-  local -a candidates=(rv64fd rv64f rv32fd rv32f)
+  local -a candidates=(rv64fd rv32fd)
 
   mapfile -t candidates < <(filter_isas rocket-chip "${candidates[@]}")
   if (( ${#candidates[@]} == 0 )); then
@@ -591,7 +612,7 @@ build_boom() {
 build_openc906() {
   local branch="$1"
   local cores="$2"
-  local -a candidates=(rv64f rv64fd)
+  local -a candidates=(rv64fd)
 
   if [[ "${cores}" != "1" ]]; then
     echo "[skip] openc906: only 1-core RV64 artifacts are supported"
@@ -615,7 +636,7 @@ build_openc906() {
 build_openc910() {
   local branch="$1"
   local cores="$2"
-  local -a candidates=(rv64f rv64fd)
+  local -a candidates=(rv64fd)
 
   if [[ "${cores}" != "1" && "${cores}" != "2" ]]; then
     echo "[skip] openc910: only 1- and 2-core RV64 artifacts are supported"
@@ -639,12 +660,7 @@ build_openc910() {
 build_xiangshan() {
   local branch="$1"
   local cores="$2"
-  local -a isas=()
-  if [[ "${MATRIX_MODE}" == "all" || ${#ISA_FILTERS[@]} -gt 0 ]]; then
-    isas=(rv64fd rv64f)
-  else
-    isas=(rv64fd)
-  fi
+  local -a isas=(rv64fd)
 
   mapfile -t isas < <(filter_isas XiangShan "${isas[@]}")
   if (( ${#isas[@]} == 0 )); then
@@ -670,18 +686,6 @@ build_xiangshan() {
 
     build_in_repo XiangShan "${branch}" "${args[@]}"
 
-    local src="${OUT_DIR}/xiangshan_${primary_isa}${preset_tag}_${cores}c${cov_suf}"
-    for isa in "${isas[@]}"; do
-      local dst="${OUT_DIR}/xiangshan_${isa}${preset_tag}_${cores}c${cov_suf}"
-      if [[ "${dst}" == "${src}" ]]; then
-        continue
-      fi
-      if (( DRY_RUN )); then
-        echo "+ cp -f ${src} ${dst}"
-      else
-        cp -f "${src}" "${dst}"
-      fi
-    done
   done
 }
 
