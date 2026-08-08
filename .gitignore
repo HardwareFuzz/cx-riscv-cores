@@ -3,6 +3,9 @@ artifacts/
 logs/
 out/
 temp_artifacts*/
+testbench.trace
+__pycache__/
+*.py[cod]
 .worktrees/
 cores/XiangShan-cx-2hart/
 cores/picorv32_2hart_wt/
