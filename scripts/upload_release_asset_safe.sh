@@ -10,7 +10,8 @@ Behavior:
   1. Upload the file to the release under a temporary asset name with curl progress.
   2. Optionally delete the old asset of the target name.
   3. Rename the temporary asset to the final asset name.
-  4. Download the final release asset and verify its size and SHA256.
+  4. Verify the final asset size and SHA256 using GitHub's server-side digest.
+     Fall back to downloading the asset only when the API does not expose a digest.
 
 Why this exists:
   gh release upload --clobber deletes the old asset before uploading the new one.
@@ -228,13 +229,37 @@ gh api \
 echo "[4/4] Verify final asset"
 FINAL_ASSET_TSV="$(
   gh api --paginate "${ASSETS_API_PATH}" \
-    --jq ".[] | select(.name == \"${ASSET_NAME}\") | [.name, .updated_at, (.size|tostring), .browser_download_url] | @tsv"
+    --jq ".[] | select(.name == \"${ASSET_NAME}\") | [.name, .updated_at, (.size|tostring), (.digest // \"\"), .browser_download_url] | @tsv"
 )"
 if [[ -z "${FINAL_ASSET_TSV}" ]]; then
   echo "ERROR: final asset ${ASSET_NAME} was not found after rename" >&2
   exit 1
 fi
 printf '%s\n' "${FINAL_ASSET_TSV}"
+
+FINAL_ASSET_SIZE="$(printf '%s\n' "${FINAL_ASSET_TSV}" | cut -f3)"
+FINAL_ASSET_DIGEST="$(printf '%s\n' "${FINAL_ASSET_TSV}" | cut -f4)"
+EXPECTED_DIGEST="sha256:${LOCAL_SHA256}"
+
+if [[ "${FINAL_ASSET_SIZE}" != "${FILE_SIZE}" ]]; then
+  echo "ERROR: final asset ${ASSET_NAME} size ${FINAL_ASSET_SIZE} != local file size ${FILE_SIZE}" >&2
+  exit 1
+fi
+
+if [[ -n "${FINAL_ASSET_DIGEST}" ]]; then
+  if [[ "${FINAL_ASSET_DIGEST}" != "${EXPECTED_DIGEST}" ]]; then
+    echo "ERROR: final asset ${ASSET_NAME} server digest mismatch" >&2
+    echo "  expected_digest=${EXPECTED_DIGEST}" >&2
+    echo "  actual_digest=${FINAL_ASSET_DIGEST}" >&2
+    exit 1
+  fi
+
+  printf 'verified_sha256=%s\n' "${LOCAL_SHA256}"
+  echo "verification=github_api_digest"
+  exit 0
+fi
+
+echo "GitHub API did not expose a digest; falling back to release download verification."
 
 VERIFY_TMP_DIR="$(mktemp -d)"
 
