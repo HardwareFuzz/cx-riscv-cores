@@ -133,6 +133,8 @@ curl -fsSL https://raw.githubusercontent.com/HardwareFuzz/cx-riscv-cores/main/sc
 - 日志目录默认是 `./logs/<YYYYMMDD>`
 - `--cores both`
 - `--matrix minimal`
+- 默认 `minimal` 矩阵包含 23 个 canonical 主 simulator；`all` 包含 25 个；
+  其中非 XiangShan 部分固定为 21 个
 - `--branch-source origin`
 - 默认启用 XiangShan
 - 默认不启用 coverage
@@ -290,6 +292,11 @@ xiangshan_rv64fd_unaligned_1c_cov_light -> CX_RISCV_CORES_XIANGSHAN_RV64FD_UNALI
 
 表中的 `all` 表示 `./scripts/build_all.sh --matrix all` 会生成的产物。
 
+不重复计算 coverage 变体，也不把下面的 `.so`、DRAMSim `.ini`、`Srec2vmem`
+等运行时支持文件当作 simulator 时，非 XiangShan 部分共有 21 个主产物；默认
+`minimal` 加上 XiangShan `unaligned` 1c/2c 后共有 23 个，`all` 再加
+XiangShan `aligned` 1c/2c 后共有 25 个。
+
 ### 环境变量总览
 
 | 环境变量 | 含义 |
@@ -389,29 +396,44 @@ xiangshan_rv64fd_unaligned_1c_cov_light -> CX_RISCV_CORES_XIANGSHAN_RV64FD_UNALI
 
 `xiangshan` 的 `--isa` 目前只影响文件名，不改变实际 RTL/config。`build_all.sh` 只发布 canonical `rv64fd_*` 标签，不再生成 `rv64f_*` 复制别名。
 
-本节矩阵只描述可构建产物；XiangShan 的 CX Trace V2 性能验证本次已延后，当前正式
-gitlink 继续使用此前已发布版本，不计入统一 cycle/IPC/CPI 对比。
+当前正式 XiangShan gitlink 已同步官方默认分支 `kunminghu-v3` 的最新基线，并叠加
+CX Trace V2 增强。本轮对下面四个 canonical RV64FD tuple 都完成了 fresh
+Chisel/firtool + Verilator 构建和运行时验收：
+
+- 1c 的 `aligned` / `unaligned` 都通过外部 Spike provider 差分、GOODTRAP、compact
+  FPR payload 检查和 strict CX Trace V2 validator；
+- 2c 的 `aligned` / `unaligned` 都通过外部 Spike 双 hart 差分，原始日志明确包含
+  `harts=[0,1]`，两个 hart 的动态身份、terminal/retired sequence 和闭区间周期自洽；
+- 两个 2c tuple 都通过双样本 multicore sync health，timing coverage 为 1.0，并实际
+  观察到两个 hart 的同时活动和同地址内存重叠。
+
+XiangShan provider 运行 simulator 时使用 `--no-diff` 关闭内部 NEMU checker，最终
+架构真值由框架启动的外部 Spike 提供。这样避免内部 NEMU 在任意 M-mode `ecall`
+workload 上提前比较 trap CSR 的已知假失败，同时保留 RTL commit trace。下方 NEMU
+`.so` 仍作为可选 runtime support 发布，但不再是当前 provider 验收的真值或必需依赖。
+
+本轮承诺的是 RV64FD 标量/浮点 trace；RVV full-width payload 不在这次验收范围内。
 
 - 当前源码里 `TLMinimalConfig` 默认就启用了硬件 misaligned load/store，所以 `default` 和 `unaligned` 在配置语义上等价；仓库现在统一只保留显式 `unaligned` 标签，避免重复和歧义
 
 | Artifact basename | Env var | `minimal` | `all` | Notes |
 | --- | --- | --- | --- | --- |
-| `xiangshan_rv64fd_aligned_1c` | `CX_RISCV_CORES_XIANGSHAN_RV64FD_ALIGNED_1C` | 否 | 是 | `aligned` preset 的 canonical 发布标签 |
-| `xiangshan_rv64fd_aligned_2c` | `CX_RISCV_CORES_XIANGSHAN_RV64FD_ALIGNED_2C` | 否 | 是 | `aligned` preset 的 canonical 发布标签 |
-| `xiangshan_rv64fd_unaligned_1c` | `CX_RISCV_CORES_XIANGSHAN_RV64FD_UNALIGNED_1C` | 是 | 是 | `unaligned` preset 的 canonical 发布标签；这是默认最小矩阵下的 XiangShan 产物 |
-| `xiangshan_rv64fd_unaligned_2c` | `CX_RISCV_CORES_XIANGSHAN_RV64FD_UNALIGNED_2C` | 是 | 是 | `unaligned` preset 的 canonical 发布标签；这是默认最小矩阵下的 XiangShan 产物 |
+| `xiangshan_rv64fd_aligned_1c` | `CX_RISCV_CORES_XIANGSHAN_RV64FD_ALIGNED_1C` | 否 | 是 | `aligned` preset；fresh build、外部 Spike provider 和 strict V2 已验收 |
+| `xiangshan_rv64fd_aligned_2c` | `CX_RISCV_CORES_XIANGSHAN_RV64FD_ALIGNED_2C` | 否 | 是 | `aligned` preset；fresh 双 hart provider、sync health 和 strict V2 已验收 |
+| `xiangshan_rv64fd_unaligned_1c` | `CX_RISCV_CORES_XIANGSHAN_RV64FD_UNALIGNED_1C` | 是 | 是 | 默认最小矩阵产物；fresh build、外部 Spike provider 和 strict V2 已验收 |
+| `xiangshan_rv64fd_unaligned_2c` | `CX_RISCV_CORES_XIANGSHAN_RV64FD_UNALIGNED_2C` | 是 | 是 | 默认最小矩阵产物；fresh 双 hart provider、sync health 和 strict V2 已验收 |
 
 ### Runtime Support
 
-这些文件不是主 simulator 可执行文件，而是 `scripts/stage_runtime_support.sh` 复制进统一产物目录的运行时依赖。
+这些文件不是主 simulator 可执行文件，而是 `scripts/stage_runtime_support.sh` 复制进统一产物目录的运行时依赖；它们不计入上面的 21/23/25 个主 simulator 数量。
 
 | Artifact basename | Env var | `minimal` | `all` | Notes |
 | --- | --- | --- | --- | --- |
 | `boom_dramsim2_system.ini` | `CX_RISCV_CORES_BOOM_DRAMSIM2_SYSTEM_INI` | 是 | 是 | BOOM DRAMSim runtime support；运行时会和下面那份 ini 组合成 `dramsim2_ini/` 目录 |
 | `boom_dramsim2_DDR3_micron_64M_8B_x4_sg15.ini` | `CX_RISCV_CORES_BOOM_DRAMSIM2_DDR3_MICRON_64M_8B_X4_SG15_INI` | 是 | 是 | BOOM DRAMSim runtime support |
 | `openc_srec2vmem` | `CX_RISCV_CORES_OPENC_SREC2VMEM` | 是 | 是 | OpenC906/OpenC910 共同使用的 `Srec2vmem` |
-| `xiangshan_difftest_rv64_1c_so` | `CX_RISCV_CORES_XIANGSHAN_DIFFTEST_RV64_1C_SO` | 是 | 是 | 来自 `cores/XiangShan/ready-to-run/riscv64-nemu-interpreter-so` |
-| `xiangshan_difftest_rv64_2c_so` | `CX_RISCV_CORES_XIANGSHAN_DIFFTEST_RV64_2C_SO` | 是 | 是 | 来自 `cores/XiangShan/ready-to-run/riscv64-nemu-interpreter-dual-so` |
+| `xiangshan_difftest_rv64_1c_so` | `CX_RISCV_CORES_XIANGSHAN_DIFFTEST_RV64_1C_SO` | 是 | 是 | 可选 legacy/internal NEMU runtime；当前 provider 使用外部 Spike，不依赖此文件 |
+| `xiangshan_difftest_rv64_2c_so` | `CX_RISCV_CORES_XIANGSHAN_DIFFTEST_RV64_2C_SO` | 是 | 是 | 可选 legacy/internal NEMU runtime；当前 provider 使用外部 Spike，不依赖此文件 |
 
 ## 2c 产物与跨 hart 同步
 
@@ -438,13 +460,17 @@ ISA A 扩展、原子处理和 cache coherence 是否同时存在。
 passing、reservation invalidation 和 memory-order litmus；CVA6 应把 cacheable 与
 uncached 地址分组作为差异/负向测试。
 
+本轮 XiangShan 两个 2c artifact 已实际通过双 hart 外部 Spike provider、strict V2
+validator 和 multicore sync health，并观察到同地址重叠；这证明了两个 hart 的运行、
+统一周期域和同步测量链路，不等价于上面列出的 atomic/coherence 压力与 litmus 已完成。
+
 ## CX Trace V2 性能口径
 
-除 XiangShan 外，本仓库已经完成验证的正式 core trace 使用统一的
-[CX Trace V2 规范](docs/CX_TRACE_V2_SPEC.md)。XiangShan 的源码移植与长时间
-Verilator 构建已明确延后，本次顶层发布继续固定在此前验证过的 XiangShan gitlink；
-在完成 1c/2c fresh build、provider smoke 和严格 validator 前，不把 XiangShan 纳入
-跨核心 cycle/IPC/CPI 排名。
+本仓库已经完成验证的正式 core trace 使用统一的
+[CX Trace V2 规范](docs/CX_TRACE_V2_SPEC.md)。XiangShan 的四个 RV64FD canonical
+artifact 也已完成 1c/2c fresh build、外部 Spike provider 和 strict validator，现已
+纳入同一动态指令身份与闭区间周期口径。比较 cycle/IPC/CPI 时仍必须使用相同 ELF、
+相同 ROI 和相同运行条件；2c 还必须保持相同 hart 数与 workload 映射。
 
 统一口径如下：
 

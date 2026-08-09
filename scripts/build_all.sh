@@ -169,6 +169,8 @@ prune_superseded_artifacts() {
     rocket-chip_rv64f_1c rocket-chip_rv64f_2c
     openc906_rv64f_1c
     openc910_rv64f_1c openc910_rv64f_2c
+    xiangshan_rv64_aligned_1c xiangshan_rv64_aligned_2c
+    xiangshan_rv64_unaligned_1c xiangshan_rv64_unaligned_2c
     xiangshan_rv64f_aligned_1c xiangshan_rv64f_aligned_2c
     xiangshan_rv64f_unaligned_1c xiangshan_rv64f_unaligned_2c
   )
