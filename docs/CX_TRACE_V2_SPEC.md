@@ -73,6 +73,12 @@ end_cycle=导致异常的指令在精确异常边界终结的周期
 
 中断没有对应 allocation token，必须使用独立的 `event=interrupt`。不得构造伪指令，也不得增加 `instret_seq`。
 
+RISC-V Debug Mode 不属于性能 ROI 的架构执行域。debug halt request、trigger、
+single-step 和已经进入 Debug Mode 后发生的 exception 不得伪装成 V2 interrupt 或
+precise-trap 主记录，也不得消耗 `term_seq`/`instret_seq`。需要分析 debug session 的
+实现可以输出独立辅助事件，但正式性能 workload 和 ROI marker 不得进入 Debug Mode；
+V2 不声明 debug-session 内的退休语义可跨核心比较。
+
 store 的主 end 是 store commit，不是 store buffer drain、cache write 或总线可见。长延迟 load/div/FPU/RoCC/vector 指令的主 end 是 architectural retire；较晚的物理寄存器写回使用辅助事件。
 
 ## 6. architectural instruction 与 uop

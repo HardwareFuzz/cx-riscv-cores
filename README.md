@@ -22,8 +22,8 @@
 ```text
 rocket-chip_rv64fd_2c           -> CX_RISCV_CORES_ROCKET_CHIP_RV64FD_2C
 rocket-chip_rv64fd_2c_cov       -> CX_RISCV_CORES_ROCKET_CHIP_RV64FD_2C_COV
-boom_rv64fd_2c                 -> CX_RISCV_CORES_BOOM_RV64FD_2C
-xiangshan_rv64_aligned_1c       -> CX_RISCV_CORES_XIANGSHAN_RV64_ALIGNED_1C
+boom_rv64fd_2c                  -> CX_RISCV_CORES_BOOM_RV64FD_2C
+xiangshan_rv64fd_aligned_1c     -> CX_RISCV_CORES_XIANGSHAN_RV64FD_ALIGNED_1C
 xiangshan_difftest_rv64_2c_so   -> CX_RISCV_CORES_XIANGSHAN_DIFFTEST_RV64_2C_SO
 ```
 
@@ -137,7 +137,8 @@ curl -fsSL https://raw.githubusercontent.com/HardwareFuzz/cx-riscv-cores/main/sc
 - 默认启用 XiangShan
 - 默认不启用 coverage
 - 1-core 构建使用各子仓库的 `cx-build` 分支
-- 2-core 构建使用各子仓库的 `cx-2hart-build` 分支
+- 除 BOOM 外，2-core 构建使用各子仓库的 `cx-2hart-build` 分支；BOOM 在
+  Chipyard `cx-build` 内按 `--cores 2` 选择双核配置
 - 结束后会自动执行 `scripts/stage_runtime_support.sh`
 
 参数如下：
@@ -146,7 +147,7 @@ curl -fsSL https://raw.githubusercontent.com/HardwareFuzz/cx-riscv-cores/main/sc
 | --- | --- | --- |
 | `--out-dir DIR` | `CX_OUT_DIR` 或 `./artifacts` | 统一产物输出目录 |
 | `--log-dir DIR` | `./logs/<YYYYMMDD>` | 每个 core 的构建日志目录 |
-| `--branch-source <auto\|local\|origin>` | `origin` | 子仓库分支解析方式 |
+| `--branch-source <auto\|local\|origin>` | `origin` | 子仓库分支解析方式；已有 linked worktree 时，`origin` 要求它 clean 且与远端完全一致 |
 | `--cores <1\|2\|both>` | `both` | 构建 1-core、2-core 或两者都构建 |
 | `--matrix <minimal\|all>` | `minimal` | 选择默认矩阵或完整矩阵；除 XiangShan 外，其他 core 的 `minimal` 已覆盖全部支持 ISA 变体 |
 | `--isa PATTERN` | 不限制 | 只构建匹配的 ISA 标签；可重复传入，也支持逗号分隔和 shell glob |
@@ -191,13 +192,18 @@ curl -fsSL https://raw.githubusercontent.com/HardwareFuzz/cx-riscv-cores/main/sc
 
 约束和注意事项：
 
-- `build_all.sh` 的 `1c` 和 `2c` 是通过切到 `cx-build` / `cx-2hart-build` 两个分支分别构建出来的
+- 如果目标分支已经由 linked worktree checkout，`build_all.sh` 会直接在该 worktree
+  构建，避免 Git 的重复 checkout 冲突；`--branch-source origin` 会要求该 worktree
+  clean 且 HEAD 与 `origin/<branch>` 完全一致
+- 除 BOOM 外，`build_all.sh` 的 `1c` 和 `2c` 通过 `cx-build` /
+  `cx-2hart-build` 两个分支分别构建；BOOM 在同一个 Chipyard `cx-build` 分支中按
+  `--cores` 选择配置
 - `picorv32` 和 `kronos` 的 `1c` / `2c` 能力就是这样拼出来的，不是单个分支同时支持两者
 - `ibex` 只支持 `rv32imc`
 - 对于同一 core、XLEN、hart 数和 preset，如果已有 `fd` provider，统一矩阵不再构建或发布只有 `f` 的 provider
 - `rv32f` 仅在没有对应 `rv32fd` provider 时保留；当前即 CVA6 的 RV32 配置
 - `cva6` 的统一发布矩阵现在只保留 `rv32f_*` / `rv64fd_*`，不再保留 plain `rv32_*` / `rv64_*`
-- `boom` 使用 `cores/boom` 里的 Chipyard `main` 分支，不跟随其他 core 的 `cx-build` / `cx-2hart-build` 分支约定
+- `boom` 使用 `cores/boom` 里的 Chipyard `cx-build` 分支；同一分支按 `--cores 1|2` 生成单核和双核产物
 - `boom` 当前只发布 `rv64fd` provider；默认 `1c` / `2c` 都使用 `small` 配置；如果你要切换成 `medium` / `large`，直接运行 `cores/boom/build.sh --variant ...`
 - `openc906` 使用 `cx-build` 分支（单 hart，Verilator 后端，支持 coverage `_cov` / `_cov_light`）；`openc910` 同时使用 `cx-build`（单 hart）和 `cx-2hart-build`（双 hart），都是 Verilator 后端，支持 coverage `_cov` / `_cov_light`
 - `xiangshan` 的 `--isa` 目前只影响产物命名，不改变 RTL/config
@@ -383,6 +389,9 @@ xiangshan_rv64fd_unaligned_1c_cov_light -> CX_RISCV_CORES_XIANGSHAN_RV64FD_UNALI
 
 `xiangshan` 的 `--isa` 目前只影响文件名，不改变实际 RTL/config。`build_all.sh` 只发布 canonical `rv64fd_*` 标签，不再生成 `rv64f_*` 复制别名。
 
+本节矩阵只描述可构建产物；XiangShan 的 CX Trace V2 性能验证本次已延后，当前正式
+gitlink 继续使用此前已发布版本，不计入统一 cycle/IPC/CPI 对比。
+
 - 当前源码里 `TLMinimalConfig` 默认就启用了硬件 misaligned load/store，所以 `default` 和 `unaligned` 在配置语义上等价；仓库现在统一只保留显式 `unaligned` 标签，避免重复和歧义
 
 | Artifact basename | Env var | `minimal` | `all` | Notes |
@@ -403,6 +412,66 @@ xiangshan_rv64fd_unaligned_1c_cov_light -> CX_RISCV_CORES_XIANGSHAN_RV64FD_UNALI
 | `openc_srec2vmem` | `CX_RISCV_CORES_OPENC_SREC2VMEM` | 是 | 是 | OpenC906/OpenC910 共同使用的 `Srec2vmem` |
 | `xiangshan_difftest_rv64_1c_so` | `CX_RISCV_CORES_XIANGSHAN_DIFFTEST_RV64_1C_SO` | 是 | 是 | 来自 `cores/XiangShan/ready-to-run/riscv64-nemu-interpreter-so` |
 | `xiangshan_difftest_rv64_2c_so` | `CX_RISCV_CORES_XIANGSHAN_DIFFTEST_RV64_2C_SO` | 是 | 是 | 来自 `cores/XiangShan/ready-to-run/riscv64-nemu-interpreter-dual-so` |
+
+## 2c 产物与跨 hart 同步
+
+`2c` 表示同一个 Verilator 仿真系统中真实、同时实例化两个 hart，共享顶层参考时钟
+和某种内存系统；它不表示 RISC-V 存在“由两个核心一起执行”的特殊指令。跨 hart
+同步仍由每个 hart 分别执行 load/store、`FENCE`、`LR/SC` 或 `AMO*` 完成，并取决于
+ISA A 扩展、原子处理和 cache coherence 是否同时存在。
+
+| Core | 2c 结构 | A 扩展 | 硬件 cache coherence | 可以据此宣称的能力 |
+| --- | --- | --- | --- | --- |
+| PicoRV32 | 两个核经 AXI 仲裁共享同一 RAM | 否 | 不适用（无 D-cache） | 普通共享 RAM 可见；不能执行标准 LR/SC/AMO 锁 |
+| Kronos | 两个核经 round-robin 共享单端口 SRAM | 否 | 不适用（无 cache） | 普通共享 SRAM 可见；不能执行标准 LR/SC/AMO 锁 |
+| Ibex | 两个核经 multi-host bus 共享 RAM | 否 | data 侧不适用；私有 I-cache 不自动同步 | 普通共享数据可见；无标准原子锁，自修改代码需显式同步 I-cache |
+| VexRiscv | 两核私有 cache 接 coherent BMB/共享 DRAM | 是 | 是 | coherent SMP，设计上支持跨 hart atomic、锁和消息传递 |
+| CVA6 | 两核 AXI 汇入共享 atomic wrapper/RAM | 是 | **否**，私有 WT D-cache 无 remote invalidation | 不能把 cacheable 共享内存上的锁和普通数据可见性视为已保证；uncached 区域需单独验证 |
+| Rocket | 两个 tile 经 coherent TileLink 接共享内存 | 是 | 是 | coherent SMP，设计上支持跨 hart atomic 和锁 |
+| BOOM | 两个 BOOM tile 经 coherent TileLink/inclusive LLC 接共享内存 | 是 | 是 | coherent SMP，设计上支持跨 hart atomic 和锁 |
+| XiangShan | 两个 tile 经 CHI 接共享 OpenLLC/AXI memory | 是 | 是 | coherent SMP，设计上支持跨 hart atomic 和锁 |
+| OpenC910 | 原生双核 cluster，经 CIU snoop 和共享 L2 接内存 | 是 | 是 | coherent 双核，设计上支持跨 hart atomic 和锁 |
+| OpenC906 | 没有 2c 产物 | — | — | 仅单 hart |
+
+“设计上支持”不等于当前 artifact 已经完成竞争压力验证。正式比较跨 hart 同步前，应
+对 coherent 候选运行同一套 `amoadd` 竞争、LR/SC 锁、release/acquire message
+passing、reservation invalidation 和 memory-order litmus；CVA6 应把 cacheable 与
+uncached 地址分组作为差异/负向测试。
+
+## CX Trace V2 性能口径
+
+除 XiangShan 外，本仓库已经完成验证的正式 core trace 使用统一的
+[CX Trace V2 规范](docs/CX_TRACE_V2_SPEC.md)。XiangShan 的源码移植与长时间
+Verilator 构建已明确延后，本次顶层发布继续固定在此前验证过的 XiangShan gitlink；
+在完成 1c/2c fresh build、provider smoke 和严格 validator 前，不把 XiangShan 纳入
+跨核心 cycle/IPC/CPI 排名。
+
+统一口径如下：
+
+- `start_cycle` 是动态指令第一次被后端正式接收并分配 trace token 的周期；
+- `end_cycle` 是 architectural commit，或同步精确异常终结该指令的周期；
+- 区间为闭区间，`span=end_cycle-start_cycle+1`；
+- store buffer drain、memory response 和晚到 writeback 是辅助事件，不能延长主
+  `end_cycle`；
+- 多 hart 使用同一个顶层参考时钟周期域，分别维护 token、terminal sequence 和
+  retired sequence；
+- 跨核心的主要性能指标是相同 ELF、相同 ROI 和相同运行条件下的 ROI cycles、
+  retired instructions、IPC/CPI。单条指令的 backend residency 可用于诊断，但不能
+  代替 IPC/CPI。
+
+可以直接严格检查 simulator 原始日志；工具会忽略 legacy 行，但要求 V2 header、
+动态身份、周期、trap/cause 和同周期 commit slot 全部自洽：
+
+```bash
+./tools/validate_cxtrace_v2.py path/to/simulator.log
+./tools/validate_cxtrace_v2.py hart0.log hart1.log
+some_simulator 2>&1 | ./tools/validate_cxtrace_v2.py
+```
+
+性能报告和 provider 的 ROI 计算方法见
+[CX Trace V2 性能统计方法](https://github.com/HardwareFuzz/riscv_fuzz_test/blob/master/docs/cx-trace-v2-performance-methodology.md)。为了让结果可比较，
+不要把 Verilator 的宿主机 wall-clock、trace 文本格式化开销或文件 I/O 时间混入
+CPU cycle/IPC/CPI。
 
 ## 最小工作流
 
