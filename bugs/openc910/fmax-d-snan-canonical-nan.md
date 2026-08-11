@@ -1,8 +1,13 @@
 # openc910: fmax.d 对单个 SNaN 操作数错误返回规范 QNaN（应返回非 NaN 操作数）
 
-> Status: **upstream-inherent（T-Head 原厂 RTL 缺陷，未在本 fork 修复）**。
-> Dated 2026-08-11。由 HardwareFuzz riscv_fuzz_test diff-spike 矩阵复现（rv64_openc910 case_03 pass_002，#180，单指令可稳定复现）。
+> Status: **upstream-inherent（T-Head 原厂 RTL 缺陷）。本 fork 已修复、重编译并 replay 验证通过（2026-08-11）**。
+> Dated 2026-08-11。由 HardwareFuzz riscv_fuzz_test diff-spike 矩阵复现（rv64_openc910 case_03 pass_002，#180，单指令可稳定复现），并通过 replay 独立复现。
 > 影响：openc910-vs-spike 差分测试的 fmax.d/fmin.d 写入值误报——**openc910 真实缺陷**，非 fuzz 框架/解析误报。
+>
+> **验证（2026-08-11）**：重编译 fixed 二进制（THREADS=4 + commit 行 fwrite 合并 + RTL 修复）后 replay 复现用例，`Initialization: PASS`（156 条 init 指令全部一致），原 fmax.d 写差异从矩阵消失：
+> - 原 bug 点 `fmax.d f19, f18, f20`（test[5]）openc910 写回 `fpreg=11 value=0x3ff0000000000000`（=1.0，非 NaN 操作数），不再返回 `0x7ff8000000000000`；
+> - 双 NaN 用例 `fmax.d f15, f13, f13`（test[178]，双 `0xfff0000000000000`）写回 `fpreg=9 value=0xfff0000000000000`，与 spike 一致；
+> - 测试指令阶段 FP 写关联恢复正常：修复前 v2 路径因 `write.cycle <= commit_end+2` 上限导致晚写回的 FP 写（如 `fmv.d.x f13` 写回 cycle=3301 > commit_end=3297）全部丢失（`execution_output` 中 0 条 f 写，触发 `INIT_REG_OVERLAP_MISMATCH`）；修复后 45 条 f 写全部正确关联，openc910 与 spike 逐条一致。
 
 ---
 
@@ -56,18 +61,20 @@ else ...                                                         // 数值比较
 
 ## 修复
 
-T-Head 原厂 RTL 缺陷（`gen_rtl` 为上游生成代码，Apache 2.0 许可），**本 fork 未改动**（改 gen_rtl 需重新生成 RTL 并重编译 Verilator 二进制）。正确修复方向：把第一个分支改为仅当**两个操作数都是 NaN（含 SNaN/QNaN）**时才返回规范 QNaN，单 SNaN 走 QNaN 分支之后逻辑（返回另一操作数）：
+T-Head 原厂 RTL 缺陷（`gen_rtl` 为上游生成代码，Apache 2.0 许可）。**本 fork 已于 2026-08-11 直接修改 `gen_rtl` 并重编译 Verilator 二进制**（`gen_rtl` 为独立代码，无再生成步骤覆盖）。修复把第一个分支改为**仅当两个操作数都是 NaN（QNaN 或 SNaN）时才返回规范 QNaN**，单侧 NaN（含 SNaN）与单 QNaN 一样返回另一操作数：
 
 ```verilog
-// 建议：仅双 NaN 返回规范 QNaN；单 SNaN 应像单 QNaN 一样返回非 NaN 操作数
-if((ex2_src0_is_snan || ex2_src1_is_snan ||
-    ex2_src0_is_qnan || ex2_src1_is_qnan) &&
-   (ex2_src0_is_snan || ex2_src0_is_qnan) &&
-   (ex2_src1_is_snan || ex2_src1_is_qnan))
+// 修复后（maxnm/minnm 一致）：
+if(ex2_src0_is_qnan && ex2_src1_is_qnan)         // 仅双 NaN -> 规范 QNaN
   ... // 规范 QNaN
+else if(ex2_src0_is_0 && ex2_src1_is_0) ...      // ±0
+else if(ex2_src0_is_qnan || ex2_src0_is_snan) ... // 单侧 NaN（含 SNaN）-> src1
+else if(ex2_src1_is_qnan || ex2_src1_is_snan) ... // 单侧 NaN（含 SNaN）-> src0
+else if(ex2_sign ^ ex2_src_change) ...            // 数值比较
+else ...                                          // 数值比较
 ```
 
-若按 T-Head 默认 dqnan（denormal/quiet NaN）收敛策略，则至少需保证单 SNaN 时把 SNaN 静默化（quiet 化）后作为非 NaN 处理并返回另一操作数——这与 spike 完全一致。
+覆盖文件：`ct_fadd_double_dp.v`（fmax.d/fmin.d/fmax.s/fmin.s）、`ct_fadd_half_dp.v`（fmax.h/fmin.h，rv64fd 未启用 Zfh 但一并修正）。各文件 maxnm/minnm 各 3 处（首条件 + 单侧 src0 + 单侧 src1），共 12 处。`fmax.s/fmin.s` 与 `fmax.d/fmin.d` 共用 double 数据通路（`ct_fadd_scalar_dp.v` 按 func[9]/func[8] 选 max/min），一次修复全部覆盖。
 
 ## 对 diff-fuzz 的意义
 
