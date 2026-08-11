@@ -110,3 +110,25 @@ export CX_RISCV_CORES_ROCKET_CHIP_RV64FD_1C=<构建产物 rocket-chip_rv64fd_1c>
 - `RocketCore.scala`: `lrscCycles`(:72)
 - Spike:`riscv-isa-sim/riscv/mmu.h:253-270`(纯地址匹配,无时间窗)
 - riscv-spec Zalrsc:§A.5.3(保留由 store/probe 失效;SC 允许失败但软件须重试)
+
+---
+
+## 补遗(2026-08-11 二期):LR arm 被递减/backoff 遮蔽 → 连续 LR/SC 对第二个静默失败
+
+diff-spike rerun5 rv32_rocket case_09(同一 bug 族的**另一条路径**)复现:
+
+- 失败用例:`sc.w x0,x0,(x6)` @ 0x87ffff1c,rocket 无写 vs spike 写 0x00(测试内 #559 / 全局 #779)。
+- 程序语义:两个背靠背 LR/SC 对——Pair A `lr.w x13,(x5); sc.w x0,x0,(x5)`(SC1 成功,写 0x87ffff38),Pair B `lr.w x0,(x6); sc.w x0,x0,(x6); sc.w.aq x11,x8,(x6)`(SC2 该成功却失败)。
+- **与 #872 的区别**:#872 是 LR 后隔 ~99 拍 + I$ refill probe 反馈环;本 case **LR→SC 背靠背(gap≈1 拍)、无 probe、无 refill**,LR 命中。
+- **根因:LR arm 在 when 链中优先级过低**。对 `lrscCount` 的多个 when 赋值被合成 if-else 链,arm(`lrscCount:=79; lrscAddr:=...`)排在**递减(count-1)和 backoff(=3)之后**。Pair A 的 SC1 成功→backoff=3 残留;Pair B 的 LR 到达时 `lrscCount>0`→递减/backoff 遮蔽 arm→`lrscAddr` 保持旧地址(0x87ffff38)→SC2 用 0x87ffff1c 检查→地址不匹配→静默失败。
+- 证据:生成的 `DCache.sv` 优先级链 `probe清0 > backoff(3) > 递减 > arm(79)`,arm 最低;单指令复现(孤立 Pair B,count=0)成功、完整历史失败、删 Pair A 历史后成功——全部吻合"残留 count 遮蔽 arm"。
+- **修复**:把 arm 移到 when 链最后(递减、backoff 之后),使 arm 优先于它们、probe 清 0 仍最高。同步收窄 backoff 为仅 SC/AMO 触发(原为任意指令,LR→SC 间隔 1 拍即被压到 3)。
+- **验证**:--clean 重建 rv32fd_1c(md5 变),重放 case_09 原 testcase → write-diff 应消失。
+- **教训**:back-to-back LR/SC 对是 fuzz 常见形态;upstream 的 arm 优先级缺陷只会在残留保留上暴露。三处 if-else 共同操作 lrscCount 时,必须保证 arm 是最新一次 LR 的绝对优先。
+
+### 修复验证(2026-08-11,隔离 worktree)
+
+- 因并行 agent 同时改动 `RocketCore.scala`(64-slot ll_tracker),在主工作区重放会解析失败(`duplicate register write`),故在**独立 worktree**(`fix/lrsc-arm-priority` @ b25229a27,仅含本 DCache 修复)中 `--clean` 重建验证。
+- rv32fd_1c:重放 case_09 原 testcase → `write_removal_rounds: 0`,SC1 写成功,write-diff 消失。
+- rv64fd_1c:重放 case_11 回归 → 仅剩既有的 `div` write-diff(rerun5 原报该 case 的原因),**无任何 LR/SC/AMO 新差异**。
+- 提交:`36ed46385 fix(dcache): LR arm must take priority over countdown/backoff`,已 ff 合并回 `cx-build`。
