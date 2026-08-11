@@ -9,6 +9,10 @@ __pycache__/
 .worktrees/
 cores/XiangShan-cx-2hart/
 cores/picorv32_2hart_wt/
+# Kronos submodule build worktrees (1c/2c regression + pre-fix reference)
+kronos_2hart_build/
+kronos_prebuild/
+kronos_prefix/
 
 # Convenience / editor
 .DS_Store
