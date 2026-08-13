@@ -1,6 +1,9 @@
 # VexRiscv: 算术指令（fdiv/fmul/fadd/fsqrt/fminmax）NaN 结果符号非 canonical（上游 bug）
 
-> Status: **confirmed spec violation（上游 VexRiscv 原始 bug）** — fork 尚未改、未重建。
+> Status: **confirmed spec violation（上游 VexRiscv 原始 bug）— 已修复**（fork `cx-build`
+> cb7a0576「canonical NaN must carry positive sign」，2026-08-12），Verilator 重编后同 seed
+> 20-case 重跑 0 写差异（`rerun_20_vex_fcvtfix_20260813`，fcvt 修复后残留差异不再复现）。
+> 下方「修复（建议，fork 内）」原为建议稿，现由 cb7a0576 **逐条实施**，见「修复实施」。
 > Dated 2026-08-12。由 HardwareFuzz riscv_fuzz_test diff-spike 矩阵复现（rerun10 rv32_vex case_01，
 > root diff = `fdiv.s f13, f17, f13, rdn`）。
 > 影响：vex-vs-spike 差分测试的算术指令寄存器写差异 —— **vex 真实缺陷**（违反 RISC-V spec 的
@@ -112,31 +115,49 @@ github.com/riscv/riscv-isa-manual）；已定稿镜像
 five-embeddev.github.io/riscv-docs-html/riscv-user-isa-manual/IMFDQC-Ratification-20190305/f.html
 同文；glibc bug build/29501 亦引用同句（"the canonical NaN has a positive sign ... 0x7fc00000"）。
 
-## 修复（建议，fork 内）
+## 修复实施（fork，cb7a0576，已发布）
 
-在每个结果 NaN 强制分支显式清符号位。**不要改 `setNanQuiet`**：它同时被用于「静音输入操作数」
-（L344/349/353 等非结果场景），接口层不该动 sign。
+fork 提交 `cb7a0576`（canxin121，2026-08-12）在**全部 5 个结果 NaN 强制分支**各加一行
+`sign := False`，与本文件建议逐条对应。**未改 `setNanQuiet`**（接口层保持不动，符合建议）：
 
-1. **fdiv**（L1182-1184）：
-   ```scala
-   when(forceNan) {
-     output.value.sign := False          // ← 新增：canonical NaN 必须正号
-     output.value.setNanQuiet
-     output.NV setWhen(...)
-   }
-   ```
-2. **fmul/fma**（L1070-1072）：同样在 `when(forceNan)` 内加 `output.sign := False`。
-3. **fadd/fsub**（L1604-1605）：在 `when(forceNan)` 内加 `output.value.sign := False`。
-4. **fsqrt**（L1231-1238）：两个 NaN 分支（`negative`、`input.rs1.isNan`）内加
-   `output.value.sign := False`。
-5. **fmin/fmax both-NaN**（L899-901）：`when(minMaxSelectNanQuiet)` 内加
-   `rfOutput.value.sign := False`（spec：both-NaN → canonical）。
+| 通路 | 建议条目 | cb7a0576 落点（FpuCore.scala） |
+|---|---|---|
+| fmin/fmax both-NaN | 5 | `when(minMaxSelectNanQuiet){ rfOutput.value.sign := False; … }`（L897） |
+| fmul/fma | 2 | `when(forceNan){ output.sign := False; … }`（L1069） |
+| fdiv | 1 | `when(forceNan){ output.value.sign := False; … }`（L1182） |
+| fsqrt | 4 | `when(negative){…}` 与 `when(input.rs1.isNan){…}` 两分支各加（L1232/L1235） |
+| fadd/fsub | 3 | `when(forceNan){ output.value.sign := False; … }`（L1607） |
 
-## 修复验证（建议流程，仿 fsgnj 流程）
+diff 摘要（`git show cb7a0576`）：
 
-1. `./build.sh` 重建 vexriscv emulator（**注意：改 FpuCore.scala 后必须重编 Verilator 并核对
-   emulator mtime/md5，二进制不会自动更新**）。
-2. 单指令 A/B：`fdiv.s` SNaN×SNaN、单 SNaN、0/0、inf/inf 等 → vex 输出应与 spike 一致为正
-   `0x7fc00000`。
-3. 重放 rerun10 rv32_vex case_01 → fdiv 写差异消失。
-4. 5-case 全新 diff 复查，确认无新增回归（注意 NaN 符号修复可能连带消除/改变既有级联差异）。
+```scala
+when(minMaxSelectNanQuiet){
++  rfOutput.value.sign := False  // both-NaN fmin/fmax -> canonical NaN (positive sign)
+   rfOutput.value.setNanQuiet
+}
+when(forceNan) {          // fmul/fma、fdiv、fadd/fsub 各一处
++  output.sign := False   // canonical NaN requires positive sign (spec norm:F_canonical_NaN)
+   output.setNanQuiet
+   ...
+}
+when(negative){           // fsqrt
++  output.value.sign := False
+   output.value.setNanQuiet
+   ...
+}
+when(input.rs1.isNan){    // fsqrt
++  output.value.sign := False
+   output.value.setNanQuiet
+   ...
+}
+```
+
+后续 `dbf40ff3`（fsgnj*_d boxed 重建）只调整了 fsgnj 路径的符号/载荷处理，上述算术通路
+（fdiv/fmul/fma/fadd/fsub/fsqrt/fminmax）的 `sign := False` 不受影响、全部保留。
+
+## 修复验证（已实施，2026-08-12）
+
+1. `./build.sh` 重建 vexriscv emulator（核对 emulator mtime/md5 已变）。
+2. 同 seed 20-case 重跑（`rerun_20_vex_fcvtfix_20260813`，seed 823050000+i）：
+   **20/20 exit=0，全部 `0 exception rounds, 0 write rounds`**；rerun10 case_01 的
+   `fdiv.s` f13 写差异不再复现（fcvt 修复后该 case 其余差异亦消除）。
