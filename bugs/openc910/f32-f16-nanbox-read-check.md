@@ -1,5 +1,7 @@
 # openc910: f32/f16 源操作数读取缺 NaN-box 检查（未合法 box 值被当普通数值）
 
+> 分类：**新 bug 新修复**（riscv_fuzz_test 未记录，fuzz bugs 目录无 openc910）
+
 > Status: **upstream-inherent（T-Head 原厂 RTL 缺陷）。本 fork 已修复、重编译并 replay/单指令验证通过（2026-08-12）**。
 > Dated 2026-08-12。由 HardwareFuzz riscv_fuzz_test diff-spike 矩阵复现（rv64_openc910 rerun8 case_02，#92，`fmin.s f17, f20, f16` 单指令可稳定复现），单指令复现 + 全用例 replay 验证通过。
 > 影响：openc910-vs-spike 差分测试的 f32/f16 窄精度指令写值误报——**openc910 真实缺陷**，非 fuzz 框架/解析误报。spike 参考侧行为正确（符合 RISC-V spec NaN Boxing）。

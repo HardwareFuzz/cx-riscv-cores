@@ -1,5 +1,7 @@
 # Upstream issue draft — CVA6 RVFI: LR/SC report nonzero `mem_wmask`
 
+> 分类：**新 bug 新修复**（riscv_fuzz_test 未记录）
+
 > Status: **draft** — review, then post to https://github.com/openhwgroup/cva6/issues
 > Body below is in English and ready to paste. Remove this header before publishing.
 > Dated 2026-08-10; already fixed and verified in our fork (see "Fix verification" at the end).

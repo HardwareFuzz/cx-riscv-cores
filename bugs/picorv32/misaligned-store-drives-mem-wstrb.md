@@ -1,5 +1,7 @@
 # PicoRV32: misaligned store 仍驱动 mem_wstrb（应 trap 且不发写使能）（上游 bug）
 
+> 分类：**旧 bug 新修复**（riscv_fuzz_test `bugs/picorv32/2` 已记录，完全重复）
+
 > Status: **confirmed spec violation（上游 YosysHQ/picorv32 原始 bug）** — 已在 fork `cx-build`
 > 分支修复（000efde，父仓库 bump ac94ce6，2026-05-11），当前发布子模块指针 e12010c 已含。
 > Dated 2026-08-13（审计归档；修复于 2026-05-11）。由 HardwareFuzz riscv_fuzz_test diff-spike

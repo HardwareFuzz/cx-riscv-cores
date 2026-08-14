@@ -1,5 +1,7 @@
 # openc906: fmax/fmin 对单个 SNaN 操作数错误返回规范 QNaN（应返回非 NaN 操作数）
 
+> 分类：**新 bug 新修复**（riscv_fuzz_test 未记录，fuzz bugs 目录无 openc906）
+
 > Status: **upstream-inherent（T-Head 原厂 RTL 缺陷）。本 fork 已修复、重编译并 replay 验证通过（2026-08-12）**。
 > Dated 2026-08-12。由 HardwareFuzz riscv_fuzz_test diff-spike 矩阵复现（rv64_openc906 rerun8 case_01 pass_000 / case_03 pass_000），并通过探针验证两核心真实状态不一致（非 fuzz 框架误报）。
 > 影响：openc906-vs-spike 差分测试的 fmax.d/fmin.d（及 fmax.s/fmin.s）写入值误报——**openc906 真实缺陷**。

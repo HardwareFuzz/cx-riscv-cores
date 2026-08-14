@@ -1,5 +1,7 @@
 # Kronos: accesses to unimplemented CSRs silently return 0 / are ignored instead of raising an illegal-instruction exception
 
+> 分类：**旧 bug 新修复**（riscv_fuzz_test `bugs/kronos/1` 已记录，CSR 非法检查族同一根因区域）
+
 > Status: **fixed in our fork** (cx-build / cx-2hart-build branches), verified against a rebuilt Verilator simulator.
 > Dated 2026-08-11. Root-caused, fixed, and verified locally; no upstream PR posted yet.
 > Affects the HardwareFuzz RISC-V diff-fuzz framework: Kronos is diffed against Spike, which

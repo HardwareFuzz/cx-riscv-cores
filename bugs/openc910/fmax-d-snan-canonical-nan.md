@@ -1,5 +1,7 @@
 # openc910: fmax.d 对单个 SNaN 操作数错误返回规范 QNaN（应返回非 NaN 操作数）
 
+> 分类：**新 bug 新修复**（riscv_fuzz_test 未记录，fuzz bugs 目录无 openc910）
+
 > Status: **upstream-inherent（T-Head 原厂 RTL 缺陷）。本 fork 已修复、重编译并 replay 验证通过（2026-08-11）**。
 > Dated 2026-08-11。由 HardwareFuzz riscv_fuzz_test diff-spike 矩阵复现（rv64_openc910 case_03 pass_002，#180，单指令可稳定复现），并通过 replay 独立复现。
 > 影响：openc910-vs-spike 差分测试的 fmax.d/fmin.d 写入值误报——**openc910 真实缺陷**，非 fuzz 框架/解析误报。

@@ -1,5 +1,7 @@
 # VexRiscv: fsgnj/fsgnjn/fsgnjx 跳过 NaN rs1 的符号位注入（上游 bug）
 
+> 分类：**旧 bug 新修复**（riscv_fuzz_test `bugs/vex/1` 已记录，fsgnj 符号族同一根因区域）
+
 > Status: **fixed in our fork** (`cx-build` branch, cores/VexRiscv), verified against a rebuilt
 > Verilator simulator (A/B) and full re-diff.
 > Dated 2026-08-12。由 HardwareFuzz riscv_fuzz_test diff-spike 矩阵复现（rerun7 rv32_vex case_01 等）。
@@ -161,3 +163,24 @@ boxed 分支不触发）；`.d` 的 boxed 分支重建 64 位 NaN-box 模式。
 
 相关：`artifacts/diff_spike_execfix_20260810_new/fresh_all_50_lowp12_rerun7_vex_fixed/`；
 subnormal 修复后的 5-case 全新 diff 见 `/tmp/vex_5case_subfix/`（5/5 CLI OK）。
+
+---
+
+## 修复链上的 fork 自引入回归（均已在 fork 内再修复，非上游缺陷）
+
+> 归并自：`bugs/vexriscv/fsgnj-boxed-flag-regression.md`、`bugs/vexriscv/fsgnj-boxed-snan-payload-quieting.md`
+> （两个 fork 自引入回归，均为本 bug 修复链的中间态，已随后续 fork commit 修复，不单列为独立上游缺陷）
+
+本 bug 的 fork 修复链为 `06426567 → cb7a0576 → dbf40ff3 → 674ebd97`，期间 fork 两次
+「修 bug 又引入 bug」，最终链路收敛：
+
+| 回归 | 引入 commit（fork） | 修复 commit（fork） | 机制 |
+|---|---|---|---|
+| boxed 标志与值分裂 | `06426567`（boxed 分支改为保持 `FpuFormat.DOUBLE` + 64 位 NaN-box 重建） | `dbf40ff3`（按 `sgnjResult` 分流：sgn=1 存 boxed float、sgn=0 存 double NaN；boxed 判定回退为 format-only） | fsgnj*_d 以 DOUBLE 格式写出高 32 位全 1 的 NaN-box 位型（如 `0xFFFFFFFF00000000`），boxed 标志=false 与值分裂；后续单精度读误判 NaN（`flt.s` 返回 0 而非 1）。单元级 A/B：J/K/L/M/N/O/P/Q 共 10 断言 |
+| boxed SNaN payload 被静音化 | `dbf40ff3`（同 commit 的「canonicalize boxed NaN/Inf payloads」对非 canonical 分支 OR quiet bit） | `674ebd97`（非 canonical 分支逐位复制 `f32.man`，仅 `f32.man==0` 防御性静音） | fsgnj 是 spec 位级操作，transfer（fld/fmv.w.x/flw）载入的 boxed SNaN 应原样保留 payload；静音化使 vex 写 `0x7fffffffffeaaaaa` 而 spike 写 `0x7fffffffffaaaaaa`（fresh 20-case rv32_vex case_19） |
+
+- 两者复现与验证均来自 riscv_fuzz_test diff-spike 矩阵（fresh_all_5_single rv32_vex case_02；
+  fresh 20-case case_19），均为真实状态差异，非框架误报。
+- 当前发布子模块指针 `674ebd97`（HEAD）已同时包含两处修复，重跑同 seed 无写差异。
+- 详细根因、单元级 A/B 与连带修复（boxed rs2 的 bit63 符号、算术 recode payload canonicalize）见
+  `dbf40ff3` / `674ebd97` commit message；两个回归的原独立文档已并入本文件（git 历史可查）。

@@ -1,5 +1,7 @@
 # VexRiscv: FCVT (F32→F64) 的 NaN 结果符号非 canonical（上游 bug）
 
+> 分类：**新 bug 新修复**（riscv_fuzz_test 未记录）
+
 > Status: **confirmed spec violation（上游 VexRiscv 原始 bug）** — 已在 fork `cx-build` 分支修复
 > （ae225728），Verilator 重编后同 seed 20-case 重跑 0 写差异。
 > Dated 2026-08-13。由 HardwareFuzz riscv_fuzz_test diff-spike 矩阵复现（fresh_all_20_single_20260813

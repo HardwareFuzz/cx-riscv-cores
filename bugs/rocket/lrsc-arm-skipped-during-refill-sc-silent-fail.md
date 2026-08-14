@@ -1,5 +1,7 @@
 # Rocket: LR/SC 保留被无关 L2 probe 静默破坏 → 背靠背 SC 合法失败(diff-spike #872 根因)
 
+> 分类：**新 bug 新修复**（riscv_fuzz_test 未记录，与 fuzz `rocket/2` 的 SC 异地址成功机制不同）
+
 > Status: **fixed in our fork** (`cx-build` branch), verified against a rebuilt Verilator simulator (A/B).
 > Dated 2026-08-11。由 HardwareFuzz riscv_fuzz_test diff-spike 矩阵复现(#872)。
 > 影响:rocket-vs-spike 差分测试的 SC 写入误报(rocket 不写、spike 写 0x00)——**rocket 真实缺陷**,非 fuzz 框架误报。

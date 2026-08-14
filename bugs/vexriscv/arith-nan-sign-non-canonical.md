@@ -1,5 +1,7 @@
 # VexRiscv: 算术指令（fdiv/fmul/fadd/fsqrt/fminmax）NaN 结果符号非 canonical（上游 bug）
 
+> 分类：**新 bug 新修复**（riscv_fuzz_test 未记录）
+
 > Status: **confirmed spec violation（上游 VexRiscv 原始 bug）— 已修复**（fork `cx-build`
 > cb7a0576「canonical NaN must carry positive sign」，2026-08-12），Verilator 重编后同 seed
 > 20-case 重跑 0 写差异（`rerun_20_vex_fcvtfix_20260813`，fcvt 修复后残留差异不再复现）。
