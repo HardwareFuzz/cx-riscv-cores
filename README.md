@@ -1,5 +1,12 @@
 # cx-riscv-cores
 
+## 多核 HDL/RTL 审计
+
+仅包含百分百确认的多 hart、多核、共享 cache/interconnect、LR/SC、核间中断和多实例
+HDL/RTL 记录的审计结果见 [multicore-audit/README.md](multicore-audit/README.md)。
+正式索引为 [multicore-audit/records.tsv](multicore-audit/records.tsv)；审计结果放在
+multicore-audit/，不写入 bugs/。
+
 `cx-riscv-cores` 是 HardwareFuzz 的统一 RISC-V core 构建仓库。
 
 这个仓库提供这些能力：
